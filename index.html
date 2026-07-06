@@ -697,8 +697,9 @@ const solarQuoterState = {
   totalSteps: 6,
   preloadedFromQuoter: false,
   data: {
-    roofM2: '',
-    floorM2: '',
+    installTecho: false,
+    installPiso: false,
+    areaM2: '',
     address: 'Apoquindo 5550, Las Condes',
     billAmount: '',
     wantsBattery: null,
@@ -721,8 +722,9 @@ function openSolarQuoter() {
   solarQuoterState.step = 1;
   solarQuoterState.preloadedFromQuoter = false;
   solarQuoterState.data = {
-    roofM2: '',
-    floorM2: '',
+    installTecho: false,
+    installPiso: false,
+    areaM2: '',
     address: 'Apoquindo 5550, Las Condes',
     billAmount: '',
     wantsBattery: null,
@@ -779,9 +781,11 @@ function calculateSolarQuotation() {
   // Generación objetivo para dejar la cuenta en $0, con el reparto base
   const targetGenKwh = (annualKwh * TARIFA) / blendedRateBase;
 
-  // Espacio disponible en cada superficie
-  const roofM2 = parseFloat(data.roofM2) || 0;
-  const floorM2 = parseFloat(data.floorM2) || 0;
+  // Espacio disponible: se pregunta un solo total de m² y en cuál de las dos
+  // superficies se va a instalar (techo o piso, una sola opción a la vez).
+  const areaTotal = parseFloat(data.areaM2) || 0;
+  const roofM2 = data.installTecho ? areaTotal : 0;
+  const floorM2 = data.installPiso ? areaTotal : 0;
   const maxPanelsTecho = Math.max(0, Math.floor(roofM2 / PANEL_AREA_M2));
   const maxPanelsPiso = Math.max(0, Math.floor((floorM2 * DENSIDAD_PISO_FACTOR) / PANEL_AREA_M2));
 
@@ -1044,22 +1048,29 @@ function renderStep1() {
 
 function renderStep2() {
   const data = solarQuoterState.data;
-  const canContinue = (parseFloat(data.roofM2) > 0) || (parseFloat(data.floorM2) > 0);
+  const hasLocation = data.installTecho || data.installPiso;
+  const canContinue = hasLocation && (parseFloat(data.areaM2) > 0);
 
   return `
     <div class="sq-step-content">
-      <div class="sq-step-icon amber">🏠</div>
-      <h3 class="sq-step-title">¿Cuánto espacio disponible tienes?</h3>
-      <p class="sq-step-desc">Estimación en metros cuadrados (m²)</p>
+      <div class="sq-step-icon amber">☀️</div>
+      <h3 class="sq-step-title">¿Dónde quieres hacer la instalación?</h3>
+      <p class="sq-step-desc">Elige una opción</p>
 
-      <div class="sq-field">
-        <label>¿Cuánto techo disponible tienes?</label>
-        <input type="number" id="sq-roof" min="0" step="1" placeholder="Ej: 30" value="${data.roofM2}" oninput="solarQuoterState.data.roofM2 = this.value; sqUpdateStep2Button();">
+      <div class="sq-options-grid" style="margin-bottom:22px;">
+        <button class="sq-option-card ${data.installTecho ? 'selected' : ''}" onclick="solarQuoterState.data.installTecho = true; solarQuoterState.data.installPiso = false; renderSolarQuoterStep();">
+          <span class="sq-option-icon">🏠</span>
+          <p class="sq-option-label">Techo</p>
+        </button>
+        <button class="sq-option-card ${data.installPiso ? 'selected' : ''}" onclick="solarQuoterState.data.installPiso = true; solarQuoterState.data.installTecho = false; renderSolarQuoterStep();">
+          <span class="sq-option-icon">🌾</span>
+          <p class="sq-option-label">Piso</p>
+        </button>
       </div>
 
       <div class="sq-field">
-        <label>¿Cuánto piso tienes disponible?</label>
-        <input type="number" id="sq-floor" min="0" step="1" placeholder="Ej: 20" value="${data.floorM2}" oninput="solarQuoterState.data.floorM2 = this.value; sqUpdateStep2Button();">
+        <label>¿Cuántos metros cuadrados tienes disponibles?</label>
+        <input type="number" id="sq-area" min="0" step="1" placeholder="Ej: 40" value="${data.areaM2}" oninput="solarQuoterState.data.areaM2 = this.value; sqUpdateStep2Button();">
       </div>
 
       <div class="sq-info-box blue">
@@ -1069,7 +1080,7 @@ function renderStep2() {
 
       <div class="sq-btn-row">
         <button class="sq-btn-secondary" onclick="prevSolarStep()">‹ Volver</button>
-        <button class="sq-btn-primary ${!canContinue ? 'disabled' : ''}" id="sq-step2-btn" onclick="if((parseFloat(solarQuoterState.data.roofM2)>0)||(parseFloat(solarQuoterState.data.floorM2)>0)) nextSolarStep()">Continuar</button>
+        <button class="sq-btn-primary ${!canContinue ? 'disabled' : ''}" id="sq-step2-btn" onclick="if((solarQuoterState.data.installTecho||solarQuoterState.data.installPiso) && parseFloat(solarQuoterState.data.areaM2)>0) nextSolarStep()">Continuar</button>
       </div>
     </div>`;
 }
@@ -1077,7 +1088,8 @@ function renderStep2() {
 function sqUpdateStep2Button() {
   const btn = document.getElementById('sq-step2-btn');
   if (!btn) return;
-  const ok = (parseFloat(solarQuoterState.data.roofM2) > 0) || (parseFloat(solarQuoterState.data.floorM2) > 0);
+  const data = solarQuoterState.data;
+  const ok = (data.installTecho || data.installPiso) && (parseFloat(data.areaM2) > 0);
   btn.classList.toggle('disabled', !ok);
 }
 
@@ -1407,13 +1419,11 @@ function renderSuccess() {
 // Estado del cotizador de electromovilidad
 const evQuoterState = {
   step: 1,
-  totalSteps: 5,
+  totalSteps: 4,
   data: {
     address: 'Apoquindo 5550, Las Condes',
-    fleetSize: '',
-    vehicleType: null,   // 'liviano' | 'pesado'
-    usoTipo: null,       // 'particular' | 'comercial'
-    hasTrifasico: null,  // true | false
+    numChargers: '',
+    cableDistanceM: '',
     clientName: '',
     clientPhone: '',
     visitDate: '',
@@ -1431,10 +1441,8 @@ function openEVQuoter() {
   evQuoterState.step = 1;
   evQuoterState.data = {
     address: 'Apoquindo 5550, Las Condes',
-    fleetSize: '',
-    vehicleType: null,
-    usoTipo: null,
-    hasTrifasico: null,
+    numChargers: '',
+    cableDistanceM: '',
     clientName: '',
     clientPhone: '',
     visitDate: '',
@@ -1456,106 +1464,33 @@ function closeEVQuoter() {
 // Calcular cotización de electromovilidad
 function calculateEVQuotation() {
   // ── Parámetros fijos del modelo ──
-  const TARIFA_ELEC = 140;              // CLP/kWh — mismo valor de autoconsumo usado en el módulo solar
-  const VENTANA_CARGA_HORAS = 8;         // horas disponibles para cargar (carga nocturna típica, 1 turno)
-  const DIAS_OPERATIVOS_ANIO = 300;      // días hábiles aproximados que circula una flota comercial
-
-  // Capacidad de batería asumida por tipo de vehículo (kWh) — supuesto editable
-  const CAPACIDAD_BATERIA_KWH = { liviano: 60, pesado: 150 };
-  // % de la batería que se consume en un día promedio, según el tipo de uso
-  const USO_PORCENTAJE_DIARIO = { particular: 0.12, comercial: 0.65 };
-
-  // Consumo eléctrico estimado del vehículo, según tipo (kWh cada 100 km)
-  const CONSUMO_KWH_100KM = { liviano: 18, pesado: 40 };
-  // Vehículo a combustión equivalente que se está reemplazando (litros cada 100 km)
-  const CONSUMO_COMBUSTIBLE_100KM = { liviano: 8, pesado: 25 };
-  // Precio de combustible: bencina para livianos, diésel para pesados (CLP/litro)
-  const PRECIO_COMBUSTIBLE = { liviano: 1300, pesado: 1100 };
-  // Factor de emisión del combustible reemplazado (kg CO2 por litro quemado)
-  const FACTOR_CO2_COMBUSTIBLE = { liviano: 2.3, pesado: 2.7 };
-
-  // Costo de equipos por tipo de cargador (CLP, por unidad)
-  const COSTO_CARGADOR_AC7 = 900000;    // AC monofásico, hasta 7 kW
-  const COSTO_CARGADOR_AC22 = 1800000;  // AC trifásico, hasta 22 kW
-  const COSTO_INSTALACION_PUNTO = 350000;   // CLP por punto — obra eléctrica, cableado, protecciones
-  const COSTO_UPGRADE_TRIFASICO = 800000;   // CLP, una vez — ampliar empalme a trifásico si no se cuenta con uno
+  const COSTO_CARGADOR = 800000;          // CLP por cargador (equipo)
+  const COSTO_INSTALACION_PUNTO = 400000; // CLP por punto de carga instalado (mano de obra)
+  const COSTO_CABLEADO_METRO = 20000;     // CLP por metro de cableado (incluye materiales y obra)
 
   const data = evQuoterState.data;
-  const fleetSize = Math.max(1, parseInt(data.fleetSize) || 1);
-  const vehicleType = data.vehicleType || 'liviano';
-  const usoTipo = data.usoTipo || 'particular';
-  const hasTrifasico = !!data.hasTrifasico;
+  const numChargers = Math.max(1, parseInt(data.numChargers) || 1);
+  const cableDistanceM = Math.max(0, parseFloat(data.cableDistanceM) || 0);
 
-  const consumoKwh100km = CONSUMO_KWH_100KM[vehicleType];
-  const capacidadBateria = CAPACIDAD_BATERIA_KWH[vehicleType];
-  const usoPorcentaje = USO_PORCENTAJE_DIARIO[usoTipo];
-
-  // Energía que se necesita reponer cada día (según cuánta batería se gasta en el uso declarado)
-  const energyPerVehicleDay = capacidadBateria * usoPorcentaje; // kWh/día que necesita cada vehículo
-  // Kilómetros diarios equivalentes, solo para mostrarle contexto al cliente (no es un input)
-  const impliedDailyKm = (energyPerVehicleDay / consumoKwh100km) * 100;
-
-  // Potencia de carga necesaria para completar la energía del día dentro de la ventana disponible
-  const requiredPowerKw = energyPerVehicleDay / VENTANA_CARGA_HORAS;
-
-  // Se eligen solo dos niveles de cargador (AC7 monofásico / AC22 trifásico), que es lo
-  // habitual para cargar una flota propia de forma nocturna en una Pyme. Si la potencia
-  // requerida supera los 7 kW, se cotiza en AC22; si además no se cuenta con empalme
-  // trifásico, se agrega el costo de ampliar el empalme (es lo que realmente se necesita
-  // para lograr cargar dentro de la ventana de 8 horas).
-  let tier = requiredPowerKw <= 7 ? 'ac7' : 'ac22';
-  let needsUpgrade = false;
-  if (tier === 'ac22' && !hasTrifasico) {
-    needsUpgrade = true; // se cotiza también la ampliación de empalme
-  }
-
-  const chargePowerKw = tier === 'ac7' ? 7 : 22;
-  const chargerUnitCost = tier === 'ac7' ? COSTO_CARGADOR_AC7 : COSTO_CARGADOR_AC22;
-  const chargeTimeHours = Math.round((energyPerVehicleDay / chargePowerKw) * 10) / 10;
-
-  const chargerCost = fleetSize * chargerUnitCost;
-  const installCost = fleetSize * COSTO_INSTALACION_PUNTO;
-  const upgradeCost = needsUpgrade ? COSTO_UPGRADE_TRIFASICO : 0;
-  const totalCost = chargerCost + installCost + upgradeCost;
-
-  // Comparación de costo de operación: electricidad vs. combustible reemplazado
-  const annualKmFleet = impliedDailyKm * fleetSize * DIAS_OPERATIVOS_ANIO;
-  const annualEnergyKwh = (annualKmFleet / 100) * consumoKwh100km;
-  const annualElectricityCost = annualEnergyKwh * TARIFA_ELEC;
-
-  const annualFuelLiters = (annualKmFleet / 100) * CONSUMO_COMBUSTIBLE_100KM[vehicleType];
-  const annualFuelCost = annualFuelLiters * PRECIO_COMBUSTIBLE[vehicleType];
-
-  const yearlySavings = Math.round(annualFuelCost - annualElectricityCost);
-  const monthlySavings = Math.round(yearlySavings / 12);
-  const paybackYears = yearlySavings > 0 ? Math.round((totalCost / yearlySavings) * 10) / 10 : null;
-
-  const co2Reduction = Math.round((annualFuelLiters * FACTOR_CO2_COMBUSTIBLE[vehicleType] / 1000) * 10) / 10; // ton CO2/año
+  // El cableado se cuenta por cada punto de carga (cada uno necesita su propio
+  // circuito desde el tablero eléctrico hasta el estacionamiento).
+  const chargerCost = numChargers * COSTO_CARGADOR;
+  const installCost = numChargers * COSTO_INSTALACION_PUNTO;
+  const cableCost = numChargers * cableDistanceM * COSTO_CABLEADO_METRO;
+  const totalCost = chargerCost + installCost + cableCost;
 
   return {
-    fleetSize,
-    vehicleType,
-    usoTipo,
-    usoPorcentajePct: Math.round(usoPorcentaje * 100),
-    dailyKm: Math.round(impliedDailyKm),
-    tier,
-    tierLabel: tier === 'ac7' ? 'AC 7 kW (monofásico)' : 'AC 22 kW (trifásico)',
-    chargePowerKw,
-    chargeTimeHours,
-    needsUpgrade,
+    numChargers,
+    cableDistanceM,
     chargerCost,
     installCost,
-    upgradeCost,
-    totalCost,
-    monthlySavings,
-    yearlySavings,
-    paybackYears,
-    co2Reduction
+    cableCost,
+    totalCost
   };
 }
 
 function nextEVStep() {
-  if (evQuoterState.step === 3) {
+  if (evQuoterState.step === 2) {
     evQuoterState.quotation = calculateEVQuotation();
   }
   evQuoterState.step++;
@@ -1589,7 +1524,7 @@ function evSaveBooking() {
     visitDate: data.visitDate,
     visitTime: data.visitTime,
     totalCost: q ? q.totalCost : null,
-    detail: q ? `${q.fleetSize} cargador(es) ${q.tierLabel}${q.needsUpgrade ? ' · + upgrade trifásico' : ''}` : '—',
+    detail: q ? `${q.numChargers} punto(s) de carga · ${q.cableDistanceM}m de cableado` : '—',
     createdAt: new Date().toISOString()
   };
 
@@ -1633,16 +1568,14 @@ function renderEVQuoterStep() {
       </div>`;
   }
 
-  // 1-Dirección → 2-Flota, vehículo y tipo de uso → 3-Empalme eléctrico → 4-Cotización → 5-Agendar
+  // 1-Dirección → 2-Puntos de carga y cableado → 3-Cotización → 4-Agendar
   if (step === 1) {
     html += renderEVStep1();
   } else if (step === 2) {
     html += renderEVStep2();
-  } else if (step === 3) {
-    html += renderEVStep4();
-  } else if (step === 4 && !evQuoterState.paymentSuccess) {
+  } else if (step === 3 && !evQuoterState.paymentSuccess) {
     html += renderEVStep5();
-  } else if (step === 5 && !evQuoterState.paymentSuccess) {
+  } else if (step === 4 && !evQuoterState.paymentSuccess) {
     html += renderEVStep6();
   } else if (evQuoterState.paymentSuccess) {
     html += renderEVSuccess();
@@ -1677,54 +1610,32 @@ function renderEVStep1() {
 
 function renderEVStep2() {
   const data = evQuoterState.data;
-  const canContinue = (parseInt(data.fleetSize) > 0) && data.vehicleType && data.usoTipo;
+  const canContinue = (parseInt(data.numChargers) > 0) && data.cableDistanceM !== '' && parseFloat(data.cableDistanceM) >= 0;
 
   return `
     <div class="sq-step-content">
-      <div class="sq-step-icon green">🚗</div>
-      <h3 class="sq-step-title">Cuéntanos sobre tu flota</h3>
-      <p class="sq-step-desc">Vehículos que quieres electrificar</p>
+      <div class="sq-step-icon green">🔌</div>
+      <h3 class="sq-step-title">Cuéntanos sobre tu instalación</h3>
+      <p class="sq-step-desc">Puntos de carga y distancia de cableado</p>
 
       <div class="sq-field">
-        <label>¿Cuántos vehículos / puntos de carga necesitas?</label>
-        <input type="number" id="ev-fleet-size" min="1" step="1" placeholder="Ej: 3" value="${data.fleetSize}" oninput="evQuoterState.data.fleetSize = this.value; evUpdateStep2Button();">
+        <label>¿Cuántos puntos de carga necesitas?</label>
+        <input type="number" id="ev-num-chargers" min="1" step="1" placeholder="Ej: 3" value="${data.numChargers}" oninput="evQuoterState.data.numChargers = this.value; evUpdateStep2Button();">
       </div>
 
-      <div class="sq-field" style="text-align:left;">
-        <label style="margin-bottom:8px;">Tipo de vehículo predominante</label>
-        <div class="sq-options-grid" style="margin-bottom:0;">
-          <button class="sq-option-card ${data.vehicleType === 'liviano' ? 'selected' : ''}" onclick="evQuoterState.data.vehicleType = 'liviano'; renderEVQuoterStep();">
-            <span class="sq-option-icon">🚗</span>
-            <p class="sq-option-label">Liviano</p>
-            <p class="sq-option-desc">Autos y furgones</p>
-          </button>
-          <button class="sq-option-card ${data.vehicleType === 'pesado' ? 'selected' : ''}" onclick="evQuoterState.data.vehicleType = 'pesado'; renderEVQuoterStep();">
-            <span class="sq-option-icon">🚚</span>
-            <p class="sq-option-label">Pesado</p>
-            <p class="sq-option-desc">Camiones y vans de reparto</p>
-          </button>
-        </div>
+      <div class="sq-field">
+        <label>¿Cuántos metros hay entre el estacionamiento y el tablero eléctrico?</label>
+        <input type="number" id="ev-cable-distance" min="0" step="1" placeholder="Ej: 15" value="${data.cableDistanceM}" oninput="evQuoterState.data.cableDistanceM = this.value; evUpdateStep2Button();">
       </div>
 
-      <div class="sq-field" style="text-align:left;">
-        <label style="margin-bottom:8px;">Tipo de uso</label>
-        <div class="sq-options-grid" style="margin-bottom:0;">
-          <button class="sq-option-card ${data.usoTipo === 'particular' ? 'selected' : ''}" onclick="evQuoterState.data.usoTipo = 'particular'; evUpdateStep2Button(); renderEVQuoterStep();">
-            <span class="sq-option-icon">🏠</span>
-            <p class="sq-option-label">Uso particular</p>
-            <p class="sq-option-desc">Uso liviano, trayectos cortos</p>
-          </button>
-          <button class="sq-option-card ${data.usoTipo === 'comercial' ? 'selected' : ''}" onclick="evQuoterState.data.usoTipo = 'comercial'; evUpdateStep2Button(); renderEVQuoterStep();">
-            <span class="sq-option-icon">📦</span>
-            <p class="sq-option-label">Uso comercial</p>
-            <p class="sq-option-desc">Operación intensiva, todo el día</p>
-          </button>
-        </div>
+      <div class="sq-info-box blue">
+        <span>💡</span>
+        <p>No te preocupes si no estás seguro, lo verificaremos en la visita técnica.</p>
       </div>
 
       <div class="sq-btn-row">
         <button class="sq-btn-secondary" onclick="prevEVStep()">‹ Volver</button>
-        <button class="sq-btn-primary green ${!canContinue ? 'disabled' : ''}" id="ev-step2-btn" onclick="if((parseInt(evQuoterState.data.fleetSize)>0) && evQuoterState.data.vehicleType && evQuoterState.data.usoTipo) nextEVStep()">Continuar</button>
+        <button class="sq-btn-primary green ${!canContinue ? 'disabled' : ''}" id="ev-step2-btn" onclick="if((parseInt(evQuoterState.data.numChargers)>0) && evQuoterState.data.cableDistanceM !== '') nextEVStep()">Continuar</button>
       </div>
     </div>`;
 }
@@ -1732,40 +1643,9 @@ function renderEVStep2() {
 function evUpdateStep2Button() {
   const btn = document.getElementById('ev-step2-btn');
   if (!btn) return;
-  const ok = (parseInt(evQuoterState.data.fleetSize) > 0) && evQuoterState.data.vehicleType && evQuoterState.data.usoTipo;
-  btn.classList.toggle('disabled', !ok);
-}
-
-function renderEVStep4() {
   const data = evQuoterState.data;
-  return `
-    <div class="sq-step-content">
-      <div class="sq-step-icon purple">⚡</div>
-      <h3 class="sq-step-title">¿Cuentas con empalme trifásico?</h3>
-      <p class="sq-step-desc">Necesario para cargadores de mayor potencia</p>
-
-      <div class="sq-battery-options">
-        <button class="sq-battery-card ${data.hasTrifasico === true ? 'selected' : ''}" onclick="evQuoterState.data.hasTrifasico = true; renderEVQuoterStep();">
-          <div class="sq-battery-header">
-            <span class="sq-battery-icon">⚡</span>
-            <span class="sq-battery-badge">Ideal</span>
-          </div>
-          <p class="sq-battery-title">Sí, tengo trifásico</p>
-          <p class="sq-battery-desc">Permite cargadores de mayor potencia (hasta 22 kW)</p>
-        </button>
-
-        <button class="sq-battery-card ${data.hasTrifasico === false ? 'selected' : ''}" onclick="evQuoterState.data.hasTrifasico = false; renderEVQuoterStep();">
-          <span class="sq-battery-icon">🔌</span>
-          <p class="sq-battery-title">No, solo monofásico</p>
-          <p class="sq-battery-desc">No te preocupes, cotizamos igual con lo que tienes</p>
-        </button>
-      </div>
-
-      <div class="sq-btn-row">
-        <button class="sq-btn-secondary" onclick="prevEVStep()">‹ Volver</button>
-        <button class="sq-btn-primary green ${data.hasTrifasico === null ? 'disabled' : ''}" onclick="if(evQuoterState.data.hasTrifasico !== null) nextEVStep()">Ver cotización</button>
-      </div>
-    </div>`;
+  const ok = (parseInt(data.numChargers) > 0) && data.cableDistanceM !== '' && parseFloat(data.cableDistanceM) >= 0;
+  btn.classList.toggle('disabled', !ok);
 }
 
 function renderEVQuoteVisual(q, data) {
@@ -1777,44 +1657,14 @@ function renderEVQuoteVisual(q, data) {
         </div>
 
         <div class="sq-quote-stats">
-          <div><p class="sq-stat-label">Potencia por punto</p><p class="sq-stat-value">${q.chargePowerKw} kW</p></div>
-          <div><p class="sq-stat-label">Cargadores</p><p class="sq-stat-value">${q.fleetSize} unidad(es)</p></div>
+          <div><p class="sq-stat-label">Puntos de carga</p><p class="sq-stat-value">${q.numChargers} unidad(es)</p></div>
+          <div><p class="sq-stat-label">Cableado</p><p class="sq-stat-value">${q.cableDistanceM} m</p></div>
         </div>
-
-        <div class="sq-battery-info">
-          <div class="sq-battery-info-header">🔌 ${q.tierLabel}</div>
-          <div class="sq-battery-info-stats">
-            <div><p class="sq-stat-label">Carga diaria</p><p class="sq-stat-value">~${q.chargeTimeHours} h</p></div>
-            <div><p class="sq-stat-label">Uso diario de batería</p><p class="sq-stat-value">${q.usoPorcentajePct}%</p></div>
-          </div>
-          <p style="font-size:12px;color:rgba(255,255,255,0.75);margin-top:8px;">Equivalente aprox. a ${q.dailyKm} km/día por vehículo</p>
-        </div>
-
-        ${q.needsUpgrade ? `
-          <div class="sq-info-box blue" style="background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.25); margin-top:12px;">
-            <span>⚠️</span>
-            <p style="color:#fff;">Incluye ampliación de empalme a trifásico, necesaria para esta potencia de carga.</p>
-          </div>
-        ` : ''}
 
         <div class="sq-quote-total">
           <span>Inversión total</span>
           <span class="sq-quote-price">$${(q.totalCost/1000000).toFixed(1)}M</span>
         </div>
-      </div>
-
-      <div class="sq-savings-box">
-        <p class="sq-savings-title">💰 Tu ahorro estimado vs. combustible</p>
-        <div class="sq-savings-grid">
-          <div><p class="sq-savings-label">Mensual</p><p class="sq-savings-value">$${q.monthlySavings.toLocaleString()}</p></div>
-          <div><p class="sq-savings-label">Anual</p><p class="sq-savings-value">$${q.yearlySavings.toLocaleString()}</p></div>
-        </div>
-        <p class="sq-savings-roi">${q.paybackYears ? `Recuperas tu inversión en ~${q.paybackYears} años` : 'Cuéntanos más para estimar el retorno'}</p>
-      </div>
-
-      <div class="sq-eco-box">
-        <span class="sq-eco-icon">🌱</span>
-        <div><p class="sq-eco-title">Impacto ambiental</p><p class="sq-eco-value">${q.co2Reduction} ton CO₂/año evitadas</p></div>
       </div>
 
       <div class="sq-address-box">
