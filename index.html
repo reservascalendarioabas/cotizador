@@ -992,7 +992,15 @@ function calculateSolarQuotation() {
   // y de cuánto autoconsumo permite la batería (si existe)
   const selfUseKwh = actualGenKwh * selfShare;
   const injectedKwh = actualGenKwh * injectionShare;
-  const yearlySavings = Math.round(selfUseKwh * TARIFA + injectedKwh * TARIFA_INYECCION);
+  const annualBillBefore = annualKwh * TARIFA;
+  // Tope: el ahorro nunca puede superar lo que el cliente efectivamente paga. Sin
+  // este tope, un sistema con batería podía "ahorrar" más que la cuenta original,
+  // porque el dimensionamiento se hace con el reparto base (60/40) pero el ahorro
+  // se calcula con el autoconsumo real ya mejorado por la batería (más alto).
+  const yearlySavings = Math.min(
+    Math.round(selfUseKwh * TARIFA + injectedKwh * TARIFA_INYECCION),
+    Math.round(annualBillBefore)
+  );
   const monthlySavings = Math.round(yearlySavings / 12);
   const paybackYears = yearlySavings > 0 ? Math.round(totalCost / yearlySavings) : null;
 
@@ -2192,82 +2200,94 @@ function buildSolarPdfSections(q, data) {
   }
 
   // "Estudio de consumos" es exclusivo de Solar (no aplica a Electromovilidad)
-  const incluye = ['Estudio de consumos', 'Estudio de instalación', 'Diseño', 'Instalación', 'Certificación SEC'];
+  const incluye = ['Estudio de consumos', 'Estudio de instalaciones existentes', 'Diseño adaptado a necesidades', 'Instalación completa', 'Certificación SEC'];
 
   const sections = [];
 
   sections.push(`
-    <div style="padding:16px 24px; border-bottom:1px solid #eee;">
-      <img src="${PDF_LOGO_B64}" style="height:24px;width:auto;display:block;">
+    <div style="padding:12px 24px; border-bottom:1px solid #eee;">
+      <img src="${PDF_LOGO_B64}" style="height:20px;width:auto;display:block;">
     </div>
   `);
 
+  const fechaEmision = new Date().toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' });
   sections.push(`
-    <div style="padding:18px 24px 14px;">
+    <table style="width:100%; border-collapse:collapse; font-size:9px; background:#f7f8fa;">
+      <tr>
+        <td style="padding:6px 24px; color:#6b7280; font-weight:700;">N° COTIZACIÓN <span style="color:#0D1B2A;">${q.quoteNumber}</span></td>
+        <td style="padding:6px 24px; color:#6b7280; font-weight:700;">FECHA DE EMISIÓN <span style="color:#0D1B2A;">${fechaEmision}</span></td>
+        <td style="padding:6px 24px; color:#6b7280; font-weight:700;">VALIDEZ DE LA OFERTA <span style="color:#0D1B2A;">15 días</span></td>
+      </tr>
+    </table>
+  `);
+
+  sections.push(`
+    <div style="padding:12px 24px 10px;">
       <div style="display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;">
         <div style="max-width:290px;">
-          <p style="font-size:10px; color:#9ca3af; font-weight:700; letter-spacing:.3px; margin:0 0 5px;">COTIZACIÓN N° ${q.quoteNumber}</p>
-          <h1 style="font-size:18px; font-weight:800; color:#0D1B2A; margin:0 0 5px; line-height:1.25;">PROYECTO SOLAR${q.includesBattery ? ' + ALMACENAMIENTO' : ''}<br>RECOMENDADO</h1>
-          ${boletaLine ? `<p style="font-size:11px; color:#6b7280; margin:0;">${boletaLine}</p>` : ''}
+          <h1 style="font-size:15px; font-weight:800; color:#0D1B2A; margin:0 0 4px; line-height:1.25;">PROYECTO SOLAR${q.includesBattery ? ' + ALMACENAMIENTO' : ''} RECOMENDADO</h1>
+          ${boletaLine ? `<p style="font-size:10px; color:#6b7280; margin:0 0 2px;">${boletaLine}</p>` : ''}
+          <p style="font-size:10px; color:#6b7280; margin:0;">Tipo de instalación: ${installTypeLabel}</p>
         </div>
         <div style="text-align:right;">
-          <p style="font-size:11.5px; font-weight:800; color:#FE5100; margin:0 0 7px;">ON GRID — ${q.systemSize} kWp</p>
-          <p style="font-size:11.5px; color:#0D1B2A; font-weight:700; margin:0;">${data.clientName || 'Cliente Abastible'}</p>
-          <p style="font-size:10.5px; color:#6b7280; margin:3px 0 0;">Tipo de instalación: ${installTypeLabel}</p>
-          <p style="font-size:10.5px; color:#6b7280; margin:3px 0 0; max-width:200px;">${data.address}</p>
+          <p style="font-size:10.5px; font-weight:800; color:#FE5100; margin:0 0 5px;">ON GRID — ${q.systemSize} kWp</p>
+          <p style="font-size:10.5px; color:#0D1B2A; font-weight:700; margin:0;">${data.clientName || 'Cliente Abastible'}</p>
+          ${data.clientEmail ? `<p style="font-size:9.5px; color:#6b7280; margin:2px 0 0;">${data.clientEmail}</p>` : ''}
+          ${data.clientPhone ? `<p style="font-size:9.5px; color:#6b7280; margin:2px 0 0;">${data.clientPhone}</p>` : ''}
+          <p style="font-size:9.5px; color:#6b7280; margin:2px 0 0; max-width:200px;">${data.address}</p>
         </div>
       </div>
     </div>
   `);
 
   sections.push(`
-    <div style="background:#0D1B2A; padding:7px 24px;">
-      <p style="color:#fff; font-size:10.5px; font-weight:800; letter-spacing:.6px; margin:0; text-align:center;">EQUIPO DEL PROYECTO</p>
+    <div style="background:#0D1B2A; padding:5px 24px;">
+      <p style="color:#fff; font-size:9.5px; font-weight:800; letter-spacing:.5px; margin:0; text-align:center;">EQUIPO DEL PROYECTO</p>
     </div>
-    <div style="background:#13253d; padding:12px 24px; display:flex; gap:8px; flex-wrap:wrap; justify-content:center;">
+    <div style="background:#13253d; padding:9px 24px; display:flex; gap:6px; flex-wrap:wrap; justify-content:center;">
       ${equipoCards.map(c => `
-        <div style="background:#1c3350; border-radius:8px; padding:8px; width:75px; text-align:center;">
-          <div style="font-size:14px; margin-bottom:4px;">${c.icon}</div>
-          <p style="color:#fff; font-size:9px; font-weight:800; margin:0 0 3px; letter-spacing:.1px;">${c.title}</p>
-          <p style="color:#FFA366; font-size:11px; font-weight:800; margin:0;">${c.highlight}</p>
+        <div style="background:#1c3350; border-radius:6px; padding:6px; width:62px; text-align:center;">
+          <div style="font-size:11px; margin-bottom:3px;">${c.icon}</div>
+          <p style="color:#fff; font-size:7.5px; font-weight:800; margin:0 0 2px; letter-spacing:.1px; line-height:1.2;">${c.title}</p>
+          <p style="color:#FFA366; font-size:9.5px; font-weight:800; margin:0;">${c.highlight}</p>
         </div>
       `).join('')}
     </div>
   `);
 
   sections.push(`
-    <div style="padding:14px 24px;">
-      <div style="display:flex; align-items:center; justify-content:center; gap:14px;">
+    <div style="padding:10px 24px;">
+      <div style="display:flex; align-items:center; justify-content:center; gap:12px;">
         <div style="text-align:center; flex:1;">
-          <p style="font-size:9.5px; color:#6b7280; margin:0 0 3px; font-weight:700; letter-spacing:.3px;">CUENTA ACTUAL</p>
-          <p style="font-size:16px; font-weight:800; color:#0D1B2A; margin:0;">${fmtCLP0(billAmountNum)}/mes</p>
+          <p style="font-size:8.5px; color:#6b7280; margin:0 0 2px; font-weight:700; letter-spacing:.3px;">CUENTA ACTUAL</p>
+          <p style="font-size:13px; font-weight:800; color:#0D1B2A; margin:0;">${fmtCLP0(billAmountNum)}/mes</p>
         </div>
-        <div style="font-size:16px; color:#FE5100; font-weight:800;">→</div>
+        <div style="font-size:14px; color:#FE5100; font-weight:800;">→</div>
         <div style="text-align:center; flex:1;">
-          <p style="font-size:9.5px; color:#6b7280; margin:0 0 3px; font-weight:700; letter-spacing:.3px;">AHORRO MENSUAL</p>
-          <p style="font-size:16px; font-weight:800; color:#FE5100; margin:0;">${fmtCLP0(q.monthlySavings)}/mes</p>
+          <p style="font-size:8.5px; color:#6b7280; margin:0 0 2px; font-weight:700; letter-spacing:.3px;">AHORRO MENSUAL</p>
+          <p style="font-size:13px; font-weight:800; color:#FE5100; margin:0;">${fmtCLP0(q.monthlySavings)}/mes</p>
         </div>
       </div>
     </div>
   `);
 
   sections.push(`
-    <div style="padding:0 24px 14px;">
-      <div style="border:2px solid #FE5100; border-radius:10px; padding:12px 16px; display:flex; justify-content:space-between; align-items:center;">
-        <span style="font-size:11.5px; font-weight:800; color:#0D1B2A;">INVERSIÓN TOTAL</span>
-        <span style="font-size:18px; font-weight:800; color:#FE5100;">${fmtCLP0(q.totalCost)}</span>
+    <div style="padding:0 24px 10px;">
+      <div style="border:2px solid #FE5100; border-radius:8px; padding:9px 14px; display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:10px; font-weight:800; color:#0D1B2A;">INVERSIÓN TOTAL</span>
+        <span style="font-size:15px; font-weight:800; color:#FE5100;">${fmtCLP0(q.totalCost)}</span>
       </div>
     </div>
   `);
 
   sections.push(`
-    <div style="background:#FE5100; padding:7px 24px;">
-      <p style="color:#fff; font-size:10.5px; font-weight:800; letter-spacing:.6px; margin:0; text-align:center;">CARACTERÍSTICAS DEL PROYECTO</p>
+    <div style="background:#FE5100; padding:5px 24px;">
+      <p style="color:#fff; font-size:9.5px; font-weight:800; letter-spacing:.5px; margin:0; text-align:center;">CARACTERÍSTICAS DEL PROYECTO</p>
     </div>
-    <div style="background:#eef1f4; padding:12px 24px; display:flex; justify-content:space-between; gap:10px;">
-      <div style="text-align:center; flex:1;"><p style="font-size:9px; color:#6b7280; margin:0 0 3px; font-weight:700;">ENERGÍA GENERADA</p><p style="font-size:12px; color:#0D1B2A; font-weight:800; margin:0;">${q.annualGeneration.toLocaleString('es-CL')} kWh/año</p></div>
-      <div style="text-align:center; flex:1;"><p style="font-size:9px; color:#6b7280; margin:0 0 3px; font-weight:700;">PAYBACK</p><p style="font-size:12px; color:#0D1B2A; font-weight:800; margin:0;">${q.paybackYears ?? '—'} años</p></div>
-      <div style="text-align:center; flex:1;"><p style="font-size:9px; color:#6b7280; margin:0 0 3px; font-weight:700;">CO₂ EVITADO</p><p style="font-size:12px; color:#0D1B2A; font-weight:800; margin:0;">${q.co2Reduction} ton/año</p></div>
+    <div style="background:#eef1f4; padding:9px 24px; display:flex; justify-content:space-between; gap:8px;">
+      <div style="text-align:center; flex:1;"><p style="font-size:7.5px; color:#6b7280; margin:0 0 2px; font-weight:700;">ENERGÍA GENERADA</p><p style="font-size:10px; color:#0D1B2A; font-weight:800; margin:0;">${q.annualGeneration.toLocaleString('es-CL')} kWh/año</p></div>
+      <div style="text-align:center; flex:1;"><p style="font-size:7.5px; color:#6b7280; margin:0 0 2px; font-weight:700;">PAYBACK</p><p style="font-size:10px; color:#0D1B2A; font-weight:800; margin:0;">${q.paybackYears ?? '—'} años</p></div>
+      <div style="text-align:center; flex:1;"><p style="font-size:7.5px; color:#6b7280; margin:0 0 2px; font-weight:700;">CO₂ EVITADO</p><p style="font-size:10px; color:#0D1B2A; font-weight:800; margin:0;">${q.co2Reduction} ton/año</p></div>
     </div>
   `);
 
@@ -2280,46 +2300,58 @@ function buildSolarPdfSections(q, data) {
 
 function buildEVPdfSections(q, data) {
   // Electromovilidad no incluye "Estudio de consumos" (eso es exclusivo de Solar)
-  const incluye = ['Estudio de instalación', 'Diseño', 'Instalación', 'Certificación SEC'];
+  const incluye = ['Estudio de instalaciones existentes', 'Diseño adaptado a necesidades', 'Instalación completa', 'Certificación SEC'];
 
   const sections = [];
 
   sections.push(`
-    <div style="padding:22px 30px; border-bottom:1px solid #eee;">
-      <img src="${PDF_LOGO_B64}" style="height:28px;width:auto;display:block;">
+    <div style="padding:12px 24px; border-bottom:1px solid #eee;">
+      <img src="${PDF_LOGO_B64}" style="height:20px;width:auto;display:block;">
     </div>
   `);
 
+  const fechaEmisionEV = new Date().toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' });
   sections.push(`
-    <div style="padding:24px 30px 20px;">
-      <div style="display:flex; justify-content:space-between; gap:18px; flex-wrap:wrap;">
+    <table style="width:100%; border-collapse:collapse; font-size:9px; background:#f7f8fa;">
+      <tr>
+        <td style="padding:6px 24px; color:#6b7280; font-weight:700;">N° COTIZACIÓN <span style="color:#0D1B2A;">${q.quoteNumber}</span></td>
+        <td style="padding:6px 24px; color:#6b7280; font-weight:700;">FECHA DE EMISIÓN <span style="color:#0D1B2A;">${fechaEmisionEV}</span></td>
+        <td style="padding:6px 24px; color:#6b7280; font-weight:700;">VALIDEZ DE LA OFERTA <span style="color:#0D1B2A;">15 días</span></td>
+      </tr>
+    </table>
+  `);
+
+  sections.push(`
+    <div style="padding:12px 24px 10px;">
+      <div style="display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;">
         <div style="max-width:290px;">
-          <p style="font-size:11px; color:#9ca3af; font-weight:700; letter-spacing:.3px; margin:0 0 6px;">COTIZACIÓN N° ${q.quoteNumber}</p>
-          <h1 style="font-size:21px; font-weight:800; color:#0D1B2A; margin:0 0 6px; line-height:1.25;">PROYECTO DE ELECTROMOVILIDAD<br>RECOMENDADO</h1>
+          <h1 style="font-size:15px; font-weight:800; color:#0D1B2A; margin:0; line-height:1.25;">PROYECTO DE ELECTROMOVILIDAD RECOMENDADO</h1>
         </div>
         <div style="text-align:right;">
-          <p style="font-size:12.5px; font-weight:800; color:#22c55e; margin:0 0 8px;">${q.numChargers} PUNTO(S) DE CARGA</p>
-          <p style="font-size:12.5px; color:#0D1B2A; font-weight:700; margin:0;">${data.clientName || 'Cliente Abastible'}</p>
-          <p style="font-size:11px; color:#6b7280; margin:3px 0 0; max-width:200px;">${data.address}</p>
+          <p style="font-size:10.5px; font-weight:800; color:#22c55e; margin:0 0 5px;">${q.numChargers} PUNTO(S) DE CARGA</p>
+          <p style="font-size:10.5px; color:#0D1B2A; font-weight:700; margin:0;">${data.clientName || 'Cliente Abastible'}</p>
+          ${data.clientEmail ? `<p style="font-size:9.5px; color:#6b7280; margin:2px 0 0;">${data.clientEmail}</p>` : ''}
+          ${data.clientPhone ? `<p style="font-size:9.5px; color:#6b7280; margin:2px 0 0;">${data.clientPhone}</p>` : ''}
+          <p style="font-size:9.5px; color:#6b7280; margin:2px 0 0; max-width:200px;">${data.address}</p>
         </div>
       </div>
     </div>
   `);
 
   sections.push(`
-    <div style="background:#0D1B2A; padding:10px 30px;">
-      <p style="color:#fff; font-size:11.5px; font-weight:800; letter-spacing:.6px; margin:0; text-align:center;">EQUIPO DEL PROYECTO</p>
+    <div style="background:#0D1B2A; padding:5px 24px;">
+      <p style="color:#fff; font-size:9.5px; font-weight:800; letter-spacing:.5px; margin:0; text-align:center;">EQUIPO DEL PROYECTO</p>
     </div>
-    <div style="background:#13253d; padding:20px 30px; display:flex; gap:12px; flex-wrap:wrap; justify-content:center;">
-      <div style="background:#1c3350; border-radius:12px; padding:16px; width:150px; text-align:center;">
-        <div style="font-size:26px; margin-bottom:8px;">🔌</div>
-        <p style="color:#fff; font-size:11px; font-weight:800; margin:0 0 4px;">${q.numChargers} CARGADOR(ES)</p>
-        <p style="color:#9fb3c8; font-size:10.5px; margin:0;">Instalación incluida</p>
+    <div style="background:#13253d; padding:9px 24px; display:flex; gap:6px; flex-wrap:wrap; justify-content:center;">
+      <div style="background:#1c3350; border-radius:6px; padding:6px; width:62px; text-align:center;">
+        <div style="font-size:11px; margin-bottom:3px;">🔌</div>
+        <p style="color:#fff; font-size:7.5px; font-weight:800; margin:0 0 2px; line-height:1.2;">CARGADORES</p>
+        <p style="color:#FFA366; font-size:9.5px; font-weight:800; margin:0;">${q.numChargers} u</p>
       </div>
-      <div style="background:#1c3350; border-radius:12px; padding:16px; width:150px; text-align:center;">
-        <div style="margin-bottom:8px; display:flex; justify-content:center;"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#FE5100" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3l4 4l-14 14l-4 -4l14 -14"/><path d="M16 7l-1.5 -1.5"/><path d="M13 10l-1.5 -1.5"/><path d="M10 13l-1.5 -1.5"/><path d="M7 16l-1.5 -1.5"/></svg></div>
-        <p style="color:#fff; font-size:11px; font-weight:800; margin:0 0 4px;">CABLEADO</p>
-        <p style="color:#9fb3c8; font-size:10.5px; margin:0;">${q.cableDistanceM} m estacionamiento–tablero</p>
+      <div style="background:#1c3350; border-radius:6px; padding:6px; width:62px; text-align:center;">
+        <div style="font-size:11px; margin-bottom:3px;">📏</div>
+        <p style="color:#fff; font-size:7.5px; font-weight:800; margin:0 0 2px; line-height:1.2;">CABLEADO</p>
+        <p style="color:#FFA366; font-size:9.5px; font-weight:800; margin:0;">${q.cableDistanceM} m</p>
       </div>
     </div>
   `);
@@ -2327,10 +2359,10 @@ function buildEVPdfSections(q, data) {
   sections.push(buildIncluyeSectionHtml(incluye));
 
   sections.push(`
-    <div style="padding:22px 30px;">
-      <div style="border:2px solid #FE5100; border-radius:12px; padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
-        <span style="font-size:12.5px; font-weight:800; color:#0D1B2A;">INVERSIÓN TOTAL</span>
-        <span style="font-size:21px; font-weight:800; color:#FE5100;">${fmtCLP0(q.totalCost)}</span>
+    <div style="padding:10px 24px;">
+      <div style="border:2px solid #FE5100; border-radius:8px; padding:9px 14px; display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:10px; font-weight:800; color:#0D1B2A;">INVERSIÓN TOTAL</span>
+        <span style="font-size:15px; font-weight:800; color:#FE5100;">${fmtCLP0(q.totalCost)}</span>
       </div>
     </div>
   `);
@@ -2343,11 +2375,16 @@ function buildEVPdfSections(q, data) {
 
 function buildIncluyeSectionHtml(incluye) {
   return `
-    <div style="padding:22px 30px 6px;">
-      <p style="font-size:12px; font-weight:800; color:#0D1B2A; margin:0 0 12px; text-align:center;">¿QUÉ INCLUYE TU PROYECTO?</p>
-      <div style="display:flex; flex-wrap:wrap; gap:8px; justify-content:center;">
-        ${incluye.map(item => `<span style="font-size:11px; color:#0D1B2A; background:#f3f4f6; border:1px solid #e5e7eb; padding:7px 12px; border-radius:8px; font-weight:600;">● ${item}</span>`).join('')}
-      </div>
+    <div style="padding:12px 24px 4px;">
+      <p style="font-size:10.5px; font-weight:800; color:#0D1B2A; margin:0 0 6px;">¿QUÉ INCLUYE TU PROYECTO?</p>
+      <table style="width:100%; border-collapse:collapse; font-size:10px;">
+        ${incluye.map((item, i) => `
+          <tr style="${i % 2 === 0 ? 'background:#f7f8fa;' : ''}">
+            <td style="padding:5px 8px; color:#FE5100; font-weight:800; width:16px;">✓</td>
+            <td style="padding:5px 8px; color:#0D1B2A; border-bottom:1px solid #eee;">${item}</td>
+          </tr>
+        `).join('')}
+      </table>
     </div>
   `;
 }
@@ -2355,16 +2392,16 @@ function buildIncluyeSectionHtml(incluye) {
 // Nota: ya no incluye el ícono de advertencia (naranjo) que se usaba antes junto al título
 function buildContactBlockHtml() {
   return `
-    <div style="padding:0 30px 20px;">
-      <div style="border:1px solid #e5e7eb; border-radius:12px; padding:16px 18px;">
-        <p style="font-size:12.5px; font-weight:700; color:#0D1B2A; margin:0 0 10px;">¿Quieres más información?</p>
-        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
-          <img src="${PDF_ICON_PHONE_B64}" style="width:13px;height:13px;">
-          <span style="font-size:11.5px;color:#374151;">${PDF_CONTACT_PHONE}</span>
+    <div style="padding:0 24px 12px;">
+      <div style="border:1px solid #e5e7eb; border-radius:8px; padding:10px 12px;">
+        <p style="font-size:10px; font-weight:700; color:#0D1B2A; margin:0 0 6px;">¿Quieres más información?</p>
+        <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+          <img src="${PDF_ICON_PHONE_B64}" style="width:11px;height:11px;">
+          <span style="font-size:10px;color:#374151;">${PDF_CONTACT_PHONE}</span>
         </div>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <img src="${PDF_ICON_EMAIL_B64}" style="width:13px;height:11.5px;">
-          <span style="font-size:11.5px;color:#374151;">${PDF_CONTACT_EMAIL}</span>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <img src="${PDF_ICON_EMAIL_B64}" style="width:11px;height:9.5px;">
+          <span style="font-size:10px;color:#374151;">${PDF_CONTACT_EMAIL}</span>
         </div>
       </div>
     </div>
@@ -2377,9 +2414,9 @@ function buildDisclaimerBlockHtml(selfSharePct, injectionSharePct, includesBatte
     ? `Se han tomado como referencia las siguientes tarifas promedio de energía: ${fmtCLP0(PDF_TARIFA)}/kWh para consumo y ${fmtCLP0(PDF_TARIFA_INYECCION)}/kWh para energía inyectada a la red, y un autoconsumo estimado del ${selfSharePct}% (${injectionSharePct}% inyectado a la red) ${batteryNote}.`
     : '';
   return `
-    <div style="background:#f9fafb; padding:16px 30px; border-top:1px solid #eee;">
-      ${tarifasLine ? `<p style="font-size:9px; color:#9ca3af; line-height:1.6; margin:0 0 8px;">${tarifasLine}</p>` : ''}
-      <p style="font-size:9px; color:#9ca3af; line-height:1.6; margin:0;">${PDF_DISCLAIMER}</p>
+    <div style="background:#f9fafb; padding:10px 24px; border-top:1px solid #eee;">
+      ${tarifasLine ? `<p style="font-size:8px; color:#9ca3af; line-height:1.5; margin:0 0 6px;">${tarifasLine}</p>` : ''}
+      <p style="font-size:8px; color:#9ca3af; line-height:1.5; margin:0;">${PDF_DISCLAIMER}</p>
     </div>
   `;
 }
