@@ -2172,32 +2172,20 @@ const fmtCLP0 = (n) => '$' + Math.round(n).toLocaleString('es-CL');
 // Construye el HTML del documento para Solar + Almacenamiento
 function buildSolarPdfSections(q, data) {
   const installTypeLabel = data.installTecho ? 'Techo' : (data.installPiso ? 'Piso' : '—');
-  const boletaLine = data.billAmount
-    ? `En base a tu boleta actual de ${fmtCLP0(data.billAmount)}`
-    : '';
   const billAmountNum = Number(data.billAmount) || 0;
+  const cuentaProyectada = Math.max(billAmountNum - q.monthlySavings, 0);
 
-  const equipoCards = [
-    {
-      icon: '☀️',
-      title: `${q.panelCount} PANELES SOLARES`,
-      highlight: `${q.systemSize} kWp`
-    }
+  const energiaCards = [
+    { icon: '☀️', label: 'Sol', sub: '' },
+    { icon: '🔲', label: `${q.panelCount} paneles`, sub: `${q.systemSize} kWp` }
   ];
   if (q.inversor) {
-    equipoCards.push({
-      icon: '⚙️',
-      title: `${q.inversor.numInversores} INVERSOR${q.inversor.numInversores > 1 ? 'ES' : ''}`,
-      highlight: `${q.inversor.potenciaTotalKw} kW`
-    });
+    energiaCards.push({ icon: '⚙️', label: `Inversor${q.inversor.numInversores > 1 ? ' x' + q.inversor.numInversores : ''}`, sub: `${q.inversor.potenciaTotalKw} kW` });
   }
   if (q.includesBattery) {
-    equipoCards.push({
-      icon: '🔋',
-      title: `${q.numBaterias} BATERÍA${q.numBaterias > 1 ? 'S' : ''}`,
-      highlight: `${q.batteryCapacity} kWh`
-    });
+    energiaCards.push({ icon: '🔋', label: 'Batería', sub: `${q.batteryCapacity} kWh` });
   }
+  energiaCards.push({ icon: '🏠', label: 'Tu hogar', sub: 'y la red' });
 
   // "Estudio de consumos" es exclusivo de Solar (no aplica a Electromovilidad)
   const incluye = ['Estudio de consumos', 'Estudio de instalaciones existentes', 'Diseño adaptado a necesidades', 'Instalación completa', 'Certificación SEC'];
@@ -2221,78 +2209,101 @@ function buildSolarPdfSections(q, data) {
     </table>
   `);
 
+  // Título: nombre del proyecto + kWp destacado en el mismo título (ya no hay badge "ON GRID" aparte)
   sections.push(`
-    <div style="padding:12px 24px 10px;">
-      <div style="display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;">
-        <div style="max-width:290px;">
-          <h1 style="font-size:15px; font-weight:800; color:#0D1B2A; margin:0 0 4px; line-height:1.25;">PROYECTO SOLAR${q.includesBattery ? ' + ALMACENAMIENTO' : ''} RECOMENDADO</h1>
-          ${boletaLine ? `<p style="font-size:10px; color:#6b7280; margin:0 0 2px;">${boletaLine}</p>` : ''}
-          <p style="font-size:10px; color:#6b7280; margin:0;">Tipo de instalación: ${installTypeLabel}</p>
+    <div style="padding:14px 24px 10px;">
+      <p style="font-size:9px; color:#9ca3af; font-weight:800; letter-spacing:.5px; margin:0 0 4px;">PROYECTO RECOMENDADO</p>
+      <h1 style="font-size:17px; font-weight:800; color:#0D1B2A; margin:0 0 7px; line-height:1.3;">Solar${q.includesBattery ? ' + Almacenamiento' : ''} — <span style="color:#FE5100;">${q.systemSize} kWp</span></h1>
+      <p style="font-size:10px; color:#6b7280; margin:0;">${data.clientName || 'Cliente Abastible'} · ${data.address}</p>
+      <p style="font-size:10px; color:#6b7280; margin:2px 0 0;">Instalación en ${installTypeLabel.toLowerCase()}</p>
+      ${data.clientEmail ? `<p style="font-size:9px; color:#9ca3af; margin:2px 0 0;">${data.clientEmail}</p>` : ''}
+      ${data.clientPhone ? `<p style="font-size:9px; color:#9ca3af; margin:2px 0 0;">${data.clientPhone}</p>` : ''}
+    </div>
+  `);
+
+  // Cuenta hoy / cuenta proyectada / ahorro mensual — lo primero que se ve tras el título
+  sections.push(`
+    <div style="padding:0 24px 4px;">
+      <div style="background:#f3f4f6; border-radius:10px; padding:12px 10px; display:flex; justify-content:space-between; text-align:center;">
+        <div style="flex:1;">
+          <p style="font-size:7.5px; color:#9ca3af; font-weight:700; letter-spacing:.3px; margin:0 0 4px;">CUENTA HOY</p>
+          <p style="font-size:12.5px; font-weight:700; color:#9ca3af; text-decoration:line-through; margin:0;">${fmtCLP0(billAmountNum)}</p>
         </div>
-        <div style="text-align:right;">
-          <p style="font-size:10.5px; font-weight:800; color:#FE5100; margin:0 0 5px;">ON GRID — ${q.systemSize} kWp</p>
-          <p style="font-size:10.5px; color:#0D1B2A; font-weight:700; margin:0;">${data.clientName || 'Cliente Abastible'}</p>
-          ${data.clientEmail ? `<p style="font-size:9.5px; color:#6b7280; margin:2px 0 0;">${data.clientEmail}</p>` : ''}
-          ${data.clientPhone ? `<p style="font-size:9.5px; color:#6b7280; margin:2px 0 0;">${data.clientPhone}</p>` : ''}
-          <p style="font-size:9.5px; color:#6b7280; margin:2px 0 0; max-width:200px;">${data.address}</p>
+        <div style="flex:1;">
+          <p style="font-size:7.5px; color:#9ca3af; font-weight:700; letter-spacing:.3px; margin:0 0 4px;">CUENTA PROYECTADA</p>
+          <p style="font-size:12.5px; font-weight:800; color:#0D1B2A; margin:0;">${fmtCLP0(cuentaProyectada)}${cuentaProyectada === 0 ? '*' : ''}</p>
+        </div>
+        <div style="flex:1;">
+          <p style="font-size:7.5px; color:#9ca3af; font-weight:700; letter-spacing:.3px; margin:0 0 4px;">AHORRO MENSUAL</p>
+          <p style="font-size:12.5px; font-weight:800; color:#FE5100; margin:0;">${fmtCLP0(q.monthlySavings)}</p>
+        </div>
+      </div>
+      <p style="font-size:7px; color:#9ca3af; margin:4px 2px 0;">*Estimado según supuestos de consumo — ver nota al pie</p>
+    </div>
+  `);
+
+  // Cómo se genera tu energía — reemplaza las tarjetas de equipo por íconos circulares
+  sections.push(`
+    <div style="background:#0D1B2A; padding:12px 24px;">
+      <p style="color:#fff; font-size:9px; font-weight:800; letter-spacing:.6px; margin:0 0 10px; text-align:center;">CÓMO SE GENERA TU ENERGÍA</p>
+      <div style="display:flex; justify-content:center; gap:10px; flex-wrap:wrap;">
+        ${energiaCards.map(c => `
+          <div style="text-align:center; width:54px;">
+            <div style="width:32px; height:32px; border-radius:50%; border:1.5px solid #FE5100; display:flex; align-items:center; justify-content:center; margin:0 auto 4px; font-size:12px;">${c.icon}</div>
+            <p style="color:#fff; font-size:7px; font-weight:700; margin:0 0 1px; line-height:1.2;">${c.label}</p>
+            <p style="color:#9fb3c8; font-size:6.5px; margin:0;">${c.sub}</p>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `);
+
+  // Cómo pagar tu proyecto — leasing vs al contado (reemplaza el recuadro único de inversión)
+  sections.push(`
+    <div style="padding:12px 24px 4px;">
+      <p style="font-size:10px; font-weight:800; color:#0D1B2A; margin:0 0 8px;">CÓMO PAGAR TU PROYECTO</p>
+      <div style="display:flex; gap:8px;">
+        <div style="flex:1; border:1.5px solid #FE5100; border-radius:10px; padding:10px;">
+          <span style="background:#FE5100; color:#fff; font-size:6px; font-weight:800; padding:2px 6px; border-radius:5px; letter-spacing:.2px;">RECOMENDADO · $0 PIE</span>
+          <p style="font-size:7.5px; color:#6b7280; font-weight:700; margin:8px 0 2px; letter-spacing:.3px;">LEASING · 48 CUOTAS</p>
+          <p style="font-size:15px; font-weight:800; color:#0D1B2A; margin:0 0 4px;">$0 <span style="font-size:8.5px; font-weight:600; color:#6b7280;">de pie</span></p>
+          <p style="font-size:7px; color:#9ca3af; margin:0 0 6px; line-height:1.4;">Cuota mensual a confirmar con tasa, sujeta a evaluación.</p>
+          <p style="font-size:7px; color:#6b7280; margin:0; line-height:1.4;">Tu ahorro estimado (${fmtCLP0(q.monthlySavings)}/mes) ayuda a cubrir la cuota desde el primer mes.</p>
+        </div>
+        <div style="flex:1; border:1px solid #e5e7eb; border-radius:10px; padding:10px; background:#f9fafb;">
+          <p style="font-size:7.5px; color:#6b7280; font-weight:700; margin:0 0 8px; letter-spacing:.3px;">AL CONTADO</p>
+          <p style="font-size:15px; font-weight:800; color:#0D1B2A; margin:0 0 6px;">${fmtCLP0(q.totalCost)}</p>
+          <p style="font-size:7px; color:#9ca3af; margin:0; line-height:1.4;">Incluye equipos, instalación y certificación SEC · se recupera en ${q.paybackYears ?? '—'} años</p>
         </div>
       </div>
     </div>
   `);
 
+  // Estadísticas del proyecto — 3 tarjetas individuales (reemplaza la franja naranja + grilla)
   sections.push(`
-    <div style="background:#0D1B2A; padding:5px 24px;">
-      <p style="color:#fff; font-size:9.5px; font-weight:800; letter-spacing:.5px; margin:0; text-align:center;">EQUIPO DEL PROYECTO</p>
-    </div>
-    <div style="background:#13253d; padding:9px 24px; display:flex; gap:6px; flex-wrap:wrap; justify-content:center;">
-      ${equipoCards.map(c => `
-        <div style="background:#1c3350; border-radius:6px; padding:6px; width:62px; text-align:center;">
-          <div style="font-size:11px; margin-bottom:3px;">${c.icon}</div>
-          <p style="color:#fff; font-size:7.5px; font-weight:800; margin:0 0 2px; letter-spacing:.1px; line-height:1.2;">${c.title}</p>
-          <p style="color:#FFA366; font-size:9.5px; font-weight:800; margin:0;">${c.highlight}</p>
+    <div style="padding:8px 24px 4px;">
+      <div style="display:flex; gap:8px;">
+        <div style="flex:1; background:#f9fafb; border:1px solid #eee; border-radius:8px; padding:8px; text-align:center;">
+          <div style="font-size:13px;">⚡</div>
+          <p style="font-size:10px; font-weight:800; color:#0D1B2A; margin:3px 0 1px;">${q.annualGeneration.toLocaleString('es-CL')} kWh</p>
+          <p style="font-size:6.5px; color:#9ca3af; font-weight:700; margin:0; letter-spacing:.2px;">ENERGÍA/AÑO</p>
         </div>
-      `).join('')}
-    </div>
-  `);
-
-  sections.push(`
-    <div style="padding:10px 24px;">
-      <div style="display:flex; align-items:center; justify-content:center; gap:12px;">
-        <div style="text-align:center; flex:1;">
-          <p style="font-size:8.5px; color:#6b7280; margin:0 0 2px; font-weight:700; letter-spacing:.3px;">CUENTA ACTUAL</p>
-          <p style="font-size:13px; font-weight:800; color:#0D1B2A; margin:0;">${fmtCLP0(billAmountNum)}/mes</p>
+        <div style="flex:1; background:#f9fafb; border:1px solid #eee; border-radius:8px; padding:8px; text-align:center;">
+          <div style="font-size:13px;">🕐</div>
+          <p style="font-size:10px; font-weight:800; color:#0D1B2A; margin:3px 0 1px;">${q.paybackYears ?? '—'} años</p>
+          <p style="font-size:6.5px; color:#9ca3af; font-weight:700; margin:0; letter-spacing:.2px;">PAYBACK</p>
         </div>
-        <div style="font-size:14px; color:#FE5100; font-weight:800;">→</div>
-        <div style="text-align:center; flex:1;">
-          <p style="font-size:8.5px; color:#6b7280; margin:0 0 2px; font-weight:700; letter-spacing:.3px;">AHORRO MENSUAL</p>
-          <p style="font-size:13px; font-weight:800; color:#FE5100; margin:0;">${fmtCLP0(q.monthlySavings)}/mes</p>
+        <div style="flex:1; background:#f9fafb; border:1px solid #eee; border-radius:8px; padding:8px; text-align:center;">
+          <div style="font-size:13px;">🍃</div>
+          <p style="font-size:10px; font-weight:800; color:#0D1B2A; margin:3px 0 1px;">${q.co2Reduction} ton</p>
+          <p style="font-size:6.5px; color:#9ca3af; font-weight:700; margin:0; letter-spacing:.2px;">CO₂ EVITADO/AÑO</p>
         </div>
       </div>
     </div>
   `);
 
-  sections.push(`
-    <div style="padding:0 24px 10px;">
-      <div style="border:2px solid #FE5100; border-radius:8px; padding:9px 14px; display:flex; justify-content:space-between; align-items:center;">
-        <span style="font-size:10px; font-weight:800; color:#0D1B2A;">INVERSIÓN TOTAL</span>
-        <span style="font-size:15px; font-weight:800; color:#FE5100;">${fmtCLP0(q.totalCost)}</span>
-      </div>
-    </div>
-  `);
-
-  sections.push(`
-    <div style="background:#FE5100; padding:5px 24px;">
-      <p style="color:#fff; font-size:9.5px; font-weight:800; letter-spacing:.5px; margin:0; text-align:center;">CARACTERÍSTICAS DEL PROYECTO</p>
-    </div>
-    <div style="background:#eef1f4; padding:9px 24px; display:flex; justify-content:space-between; gap:8px;">
-      <div style="text-align:center; flex:1;"><p style="font-size:7.5px; color:#6b7280; margin:0 0 2px; font-weight:700;">ENERGÍA GENERADA</p><p style="font-size:10px; color:#0D1B2A; font-weight:800; margin:0;">${q.annualGeneration.toLocaleString('es-CL')} kWh/año</p></div>
-      <div style="text-align:center; flex:1;"><p style="font-size:7.5px; color:#6b7280; margin:0 0 2px; font-weight:700;">PAYBACK</p><p style="font-size:10px; color:#0D1B2A; font-weight:800; margin:0;">${q.paybackYears ?? '—'} años</p></div>
-      <div style="text-align:center; flex:1;"><p style="font-size:7.5px; color:#6b7280; margin:0 0 2px; font-weight:700;">CO₂ EVITADO</p><p style="font-size:10px; color:#0D1B2A; font-weight:800; margin:0;">${q.co2Reduction} ton/año</p></div>
-    </div>
-  `);
-
-  sections.push(buildIncluyeSectionHtml(incluye));
-  sections.push(buildContactBlockHtml());
+  sections.push(buildTimelineSectionHtml(incluye));
+  sections.push(buildContactBlockHtml(q.monthlySavings));
   sections.push(buildDisclaimerBlockHtml(q.selfSharePct, q.injectionSharePct, q.includesBattery));
 
   return sections;
@@ -2373,6 +2384,24 @@ function buildEVPdfSections(q, data) {
   return sections;
 }
 
+const PDF_ICON_PHONE_WHITE_B64 = 'data:image/png;base64,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';
+const PDF_ICON_EMAIL_WHITE_B64 = 'data:image/png;base64,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';
+
+// Timeline numerada "Tu proyecto paso a paso" (círculos 01, 02, 03...)
+function buildTimelineSectionHtml(items) {
+  return `
+    <div style="padding:10px 24px 4px;">
+      <p style="font-size:10.5px; font-weight:800; color:#0D1B2A; margin:0 0 10px;">Tu proyecto paso a paso</p>
+      ${items.map((item, i) => `
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:${i < items.length - 1 ? '8' : '0'}px;">
+          <div style="width:18px; height:18px; border-radius:50%; background:#0D1B2A; color:#fff; font-size:7px; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0;">${String(i + 1).padStart(2, '0')}</div>
+          <p style="font-size:9.5px; color:#0D1B2A; font-weight:600; margin:0;">${item}</p>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
 function buildIncluyeSectionHtml(incluye) {
   return `
     <div style="padding:12px 24px 4px;">
@@ -2390,19 +2419,23 @@ function buildIncluyeSectionHtml(incluye) {
 }
 
 // Nota: ya no incluye el ícono de advertencia (naranjo) que se usaba antes junto al título
-function buildContactBlockHtml() {
+function buildContactBlockHtml(monthlySavings) {
+  const reassurance = monthlySavings
+    ? `Sin costo ni compromiso — confirmamos precio final y cuota tras la visita.`
+    : `Sin costo ni compromiso — confirmamos precio final tras la visita.`;
   return `
     <div style="padding:0 24px 12px;">
-      <div style="border:1px solid #e5e7eb; border-radius:8px; padding:10px 12px;">
-        <p style="font-size:10px; font-weight:700; color:#0D1B2A; margin:0 0 6px;">¿Quieres más información?</p>
-        <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
-          <img src="${PDF_ICON_PHONE_B64}" style="width:11px;height:11px;">
-          <span style="font-size:10px;color:#374151;">${PDF_CONTACT_PHONE}</span>
+      <div style="background:#FE5100; border-radius:10px; padding:12px 14px;">
+        <p style="font-size:10.5px; font-weight:800; color:#fff; margin:0 0 8px;">¿Avanzamos con tu visita técnica?</p>
+        <div style="display:flex; align-items:center; gap:6px; margin-bottom:5px;">
+          <img src="${PDF_ICON_PHONE_WHITE_B64}" style="width:11px;height:11px;">
+          <span style="font-size:10px;color:#fff;">${PDF_CONTACT_PHONE}</span>
         </div>
-        <div style="display:flex; align-items:center; gap:6px;">
-          <img src="${PDF_ICON_EMAIL_B64}" style="width:11px;height:9.5px;">
-          <span style="font-size:10px;color:#374151;">${PDF_CONTACT_EMAIL}</span>
+        <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+          <img src="${PDF_ICON_EMAIL_WHITE_B64}" style="width:11px;height:9.5px;">
+          <span style="font-size:10px;color:#fff;">${PDF_CONTACT_EMAIL}</span>
         </div>
+        <p style="font-size:8px; color:rgba(255,255,255,0.85); margin:0; line-height:1.4;">${reassurance}</p>
       </div>
     </div>
   `;
