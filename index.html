@@ -414,6 +414,7 @@ body {
 .sq-step-icon.yellow { background: #fef9c3; }
 .sq-step-icon.purple { background: #f3e8ff; }
 .sq-step-icon.orange { background: #ffedd5; }
+.sq-step-icon.green { background: #dcfce7; }
 .sq-step-title { font-size: 20px; font-weight: 800; color: #1f2937; margin: 0 0 4px; }
 .sq-step-desc { font-size: 14px; color: #6b7280; margin: 0 0 16px; }
 
@@ -436,6 +437,22 @@ body {
 .sq-option-card.selected { border-color: #22c55e; background: #f0fdf4; }
 .sq-option-icon { font-size: 28px; display: block; margin-bottom: 8px; }
 .sq-option-label { font-size: 14px; font-weight: 700; color: #1f2937; margin: 0 0 2px; }
+.sq-option-sublabel { font-size: 11.5px; color: #6b7280; margin: 0; line-height: 1.35; }
+
+/* Variante de 3 columnas (ej: tipo de aislación, uso del espacio) */
+.sq-options-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+.sq-options-grid-3 .sq-option-card { padding: 12px 8px; text-align: center; }
+.sq-options-grid-3 .sq-option-icon { font-size: 22px; margin-bottom: 6px; }
+.sq-options-grid-3 .sq-option-label { font-size: 12.5px; }
+.sq-options-grid-3 .sq-option-sublabel { font-size: 10px; }
+@media (max-width: 420px) {
+  .sq-options-grid-3 { gap: 7px; }
+  .sq-options-grid-3 .sq-option-card { padding: 10px 5px; }
+}
+
+/* Grilla 2x2 para inputs numéricos cortos (ej: ventanas por orientación) */
+.sq-field-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+.sq-field-grid-2 .sq-field { margin-bottom: 0; }
 .sq-option-desc { font-size: 12px; color: #6b7280; margin: 0; }
 .sq-option-kw { font-size: 12px; color: #22c55e; font-weight: 600; margin: 4px 0 0; }
 
@@ -617,7 +634,7 @@ body {
           </button>
 
           <!-- Climatización -->
-          <button class="cotiz-solution-card" style="--sol-accent:var(--violeta);--sol-bg:var(--violeta-10);">
+          <button class="cotiz-solution-card" onclick="openClimateQuoter()" style="--sol-accent:var(--violeta);--sol-bg:var(--violeta-10);">
             <div class="cotiz-sol-ico" style="background:var(--sol-bg);">
               <svg viewBox="0 0 24 24" fill="none" stroke="var(--sol-accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;"><path d="M12 2a5 5 0 0 1 5 5c0 2-1 3-2 4.5S13 14 13 16H11c0-2-.5-2.5-2-4.5S7 9 7 7a5 5 0 0 1 5-5z"/><line x1="10" y1="20" x2="14" y2="20"/><line x1="10" y1="22" x2="14" y2="22"/></svg>
             </div>
@@ -664,13 +681,20 @@ body {
   </div>
 </div>
 
+<!-- ═══ MODAL CLIMATE QUOTER (Climatización) ═══ -->
+<div id="climate-quoter-modal" class="sq-modal">
+  <div class="sq-modal-content" onclick="event.stopPropagation()">
+    <div id="climate-quoter-content"></div>
+  </div>
+</div>
+
 <!-- ═══ MODAL PANEL INTERNO DE CITAS AGENDADAS ═══ -->
 <div id="sq-admin-modal" class="sq-admin-modal" onclick="sqCloseAdminPanel()">
   <div class="sq-admin-content" onclick="event.stopPropagation()">
     <div class="sq-admin-header">
       <div>
         <h2>Citas agendadas</h2>
-        <p>Visitas técnicas solicitadas desde el cotizador (Solar + Almacenamiento y Electromovilidad)</p>
+        <p>Visitas técnicas solicitadas desde el cotizador (Solar + Almacenamiento, Electromovilidad y Climatización)</p>
       </div>
       <button class="sq-close-btn" onclick="sqCloseAdminPanel()">×</button>
     </div>
@@ -2019,6 +2043,780 @@ function renderEVSuccess() {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
+   MÓDULO CLIMATIZACIÓN
+   Por ahora este módulo solo recopila los inputs necesarios para cotizar
+   (mismo patrón visual que Solar + Almacenamiento y Electromovilidad).
+   La fórmula de cálculo (carga térmica, equipo sugerido, precio, etc.) se
+   implementará más adelante en calculateClimateQuotation().
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const climateQuoterState = {
+  step: 1,
+  totalSteps: 7,
+  data: {
+    address: 'Apoquindo 5550, Las Condes',
+    necesidad: null,        // 'frio' | 'calor' | 'ambas'
+    areaM2: '',
+    alturaTecho: '',
+    aislacion: null,        // 'liviana' | 'estandar' | 'alta'
+    ventanaNorte: '',
+    ventanaSur: '',
+    ventanaEste: '',
+    ventanaOeste: '',
+    uso: null,              // 'residencial' | 'comercial' | 'industrial'
+    tipoEquipo: null,       // 'fijo' | 'portatil'
+    clientName: '',
+    clientPhone: '',
+    clientEmail: '',
+    visitDate: '',
+    visitTime: ''
+  },
+  calendarNav: null,
+  quotation: null,
+  paymentSuccess: false
+};
+
+function openClimateQuoter() {
+  document.getElementById('climate-quoter-modal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+
+  climateQuoterState.step = 1;
+  climateQuoterState.data = {
+    address: 'Apoquindo 5550, Las Condes',
+    necesidad: null,
+    areaM2: '',
+    alturaTecho: '',
+    aislacion: null,
+    ventanaNorte: '',
+    ventanaSur: '',
+    ventanaEste: '',
+    ventanaOeste: '',
+    uso: null,
+    tipoEquipo: null,
+    clientName: '',
+    clientPhone: '',
+    clientEmail: '',
+    visitDate: '',
+    visitTime: ''
+  };
+  const todayCl = new Date();
+  climateQuoterState.calendarNav = { year: todayCl.getFullYear(), month: todayCl.getMonth() };
+  climateQuoterState.quotation = null;
+  climateQuoterState.paymentSuccess = false;
+
+  renderClimateQuoterStep();
+}
+
+function closeClimateQuoter() {
+  document.getElementById('climate-quoter-modal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CÁLCULO DE CARGA TÉRMICA Y SELECCIÓN DE EQUIPO (Climatización)
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const CLIMATE_BASE_W_M3 = 37; // W por m³ de volumen (base de carga térmica)
+
+// Orientación de ventanas — YA AJUSTADO AL HEMISFERIO SUR (Chile): el Norte es
+// el lado que más sol recibe acá (no el Sur, como en calculadoras europeas).
+const CLIMATE_ORIENTACION_FACTOR = { norte: 260, sur: 100, este: 160, oeste: 300 }; // W/m²
+
+// Mismo factor de aislación para frío y calor (una buena aislación ayuda en ambos casos)
+const CLIMATE_AISLACION_FACTOR = { liviana: 1.30, estandar: 1.00, alta: 0.75 };
+
+// TODO: este módulo todavía no pide ubicación/comuna, así que no hay zona
+// climática real que aplicar — se usa un factor neutro (zona "Centro") por
+// ahora. Cuando se agregue ese input, reemplazar esto por la tabla
+// Norte/Centro/Sur que definimos (frío 1.25/1.00/0.75, calor 0.70/1.00/1.35).
+const CLIMATE_ZONA_FACTOR = { frio: 1.00, calor: 1.00 };
+
+// Ocupación y equipos que generan calor, derivados del uso del espacio
+// (no se le pregunta al cliente directamente, para mantener el flujo corto)
+const CLIMATE_M2_POR_PERSONA = { residencial: 25, comercial: 8, industrial: 40 };
+const CLIMATE_EQUIPOS_W_M2 = { residencial: 3, comercial: 8, industrial: 15 };
+
+// Los portátiles rinden ~30% menos que su capacidad nominal en condiciones
+// reales (norma SACC vs. ASHRAE) por la presión negativa y el compresor
+// dentro del ambiente. Los Split Muro no llevan este descuento.
+const CLIMATE_PORTATIL_DERATE = 0.70;
+
+// Catálogo Split Muro (frío = calor, mismo BTU nominal en ambos modos)
+const CLIMATE_CATALOGO_FIJO = [
+  { modelo: 'GES9ECOFLOW-N', frioBTU: 9000, calorBTU: 9000, costoEquipo: 294990, costoInstalacion: 400000 },
+  { modelo: 'GES12ECOFLOW-N', frioBTU: 12000, calorBTU: 12000, costoEquipo: 315990, costoInstalacion: 400000 },
+  { modelo: 'GES18ECOFLOW-N', frioBTU: 18000, calorBTU: 18000, costoEquipo: 449990, costoInstalacion: 500000 },
+  { modelo: 'GES24ECOFLOW-N', frioBTU: 24000, calorBTU: 24000, costoEquipo: 565990, costoInstalacion: 500000 }
+];
+
+// Catálogo Portátil (calor nominal es menor que frío — EVPORT-9 no trae
+// calor de fábrica, se asume 15% menos que su frío según lo indicado)
+const CLIMATE_CATALOGO_PORTATIL = [
+  { modelo: 'EVPORT-9', frioBTU: 9000, calorBTU: 7650, costoEquipo: 249990, costoInstalacion: 50000 },
+  { modelo: 'EVPORT-12', frioBTU: 12000, calorBTU: 9200, costoEquipo: 299990, costoInstalacion: 50000 },
+  { modelo: 'EVPORT-14', frioBTU: 14000, calorBTU: 11600, costoEquipo: 369990, costoInstalacion: 50000 }
+];
+
+function calculateClimateQuotation() {
+  const data = climateQuoterState.data;
+  const areaM2 = parseFloat(data.areaM2) || 0;
+  const altura = parseFloat(data.alturaTecho) || 0;
+  const volumen = areaM2 * altura;
+
+  const personas = areaM2 / (CLIMATE_M2_POR_PERSONA[data.uso] || 20);
+  const equiposWm2 = CLIMATE_EQUIPOS_W_M2[data.uso] || 5;
+  const factorAislacion = CLIMATE_AISLACION_FACTOR[data.aislacion] || 1.0;
+
+  const ventN = parseFloat(data.ventanaNorte) || 0;
+  const ventS = parseFloat(data.ventanaSur) || 0;
+  const ventE = parseFloat(data.ventanaEste) || 0;
+  const ventO = parseFloat(data.ventanaOeste) || 0;
+  const cargaVentanas = ventN * CLIMATE_ORIENTACION_FACTOR.norte
+    + ventS * CLIMATE_ORIENTACION_FACTOR.sur
+    + ventE * CLIMATE_ORIENTACION_FACTOR.este
+    + ventO * CLIMATE_ORIENTACION_FACTOR.oeste;
+
+  const cargaBase = volumen * CLIMATE_BASE_W_M3;
+
+  // ── Carga de frío: todo lo que genera calor es un problema, se suma ──
+  const subtotalFrio = cargaBase + (personas * 150) + cargaVentanas + (areaM2 * equiposWm2);
+  const cargaFrioW = subtotalFrio * factorAislacion * CLIMATE_ZONA_FACTOR.frio;
+  const cargaFrioBTU = Math.round(cargaFrioW * 3.412);
+
+  // ── Carga de calor: personas/equipos/sol ayudan gratis, se restan ──
+  // (la ganancia solar se pondera a la mitad: solo ocurre de día, no las 24h)
+  const subtotalCalorBruto = cargaBase - (personas * 100) - (cargaVentanas * 0.5);
+  const subtotalCalor = Math.max(subtotalCalorBruto, cargaBase * 0.4); // piso de seguridad
+  const cargaCalorW = subtotalCalor * factorAislacion * CLIMATE_ZONA_FACTOR.calor;
+  const cargaCalorBTU = Math.round(cargaCalorW * 3.412);
+
+  const necesitaFrio = data.necesidad === 'frio' || data.necesidad === 'ambas';
+  const necesitaCalor = data.necesidad === 'calor' || data.necesidad === 'ambas';
+
+  // ── Selección del equipo más chico que cumpla (catálogo ya viene ordenado
+  // de menor a mayor capacidad) ──
+  const esPortatil = data.tipoEquipo === 'portatil';
+  const catalogo = esPortatil ? CLIMATE_CATALOGO_PORTATIL : CLIMATE_CATALOGO_FIJO;
+
+  let equipoElegido = null;
+  for (const eq of catalogo) {
+    const capFrioReal = Math.round(esPortatil ? eq.frioBTU * CLIMATE_PORTATIL_DERATE : eq.frioBTU);
+    const capCalorReal = Math.round(esPortatil ? eq.calorBTU * CLIMATE_PORTATIL_DERATE : eq.calorBTU);
+    const cumpleFrio = !necesitaFrio || capFrioReal >= cargaFrioBTU;
+    const cumpleCalor = !necesitaCalor || capCalorReal >= cargaCalorBTU;
+    if (cumpleFrio && cumpleCalor) {
+      equipoElegido = {
+        modelo: eq.modelo, capFrioReal, capCalorReal,
+        costoEquipo: eq.costoEquipo, costoInstalacion: eq.costoInstalacion,
+        totalCost: eq.costoEquipo + eq.costoInstalacion
+      };
+      break;
+    }
+  }
+
+  let advertencia = null;
+  if (!equipoElegido) {
+    const masGrande = catalogo[catalogo.length - 1];
+    equipoElegido = {
+      modelo: masGrande.modelo,
+      capFrioReal: Math.round(esPortatil ? masGrande.frioBTU * CLIMATE_PORTATIL_DERATE : masGrande.frioBTU),
+      capCalorReal: Math.round(esPortatil ? masGrande.calorBTU * CLIMATE_PORTATIL_DERATE : masGrande.calorBTU),
+      costoEquipo: masGrande.costoEquipo, costoInstalacion: masGrande.costoInstalacion,
+      totalCost: masGrande.costoEquipo + masGrande.costoInstalacion
+    };
+    advertencia = 'Ningún equipo individual del catálogo cubre esta carga por completo — se recomienda evaluar más de un equipo, zonificación, o una visita técnica especializada.';
+  }
+
+  return {
+    quoteNumber: sqGenerateQuoteNumber(),
+    necesidad: data.necesidad,
+    cargaFrioBTU: necesitaFrio ? cargaFrioBTU : null,
+    cargaCalorBTU: necesitaCalor ? cargaCalorBTU : null,
+    tipoEquipo: data.tipoEquipo,
+    equipo: equipoElegido,
+    totalCost: equipoElegido.totalCost,
+    advertencia
+  };
+}
+
+function nextClimateStep() {
+  if (climateQuoterState.step === climateQuoterState.totalSteps) {
+    climateQuoterState.quotation = calculateClimateQuotation();
+  }
+  climateQuoterState.step++;
+  renderClimateQuoterStep();
+}
+
+function prevClimateStep() {
+  if (climateQuoterState.step <= 1) {
+    closeClimateQuoter();
+    return;
+  }
+  climateQuoterState.step--;
+  renderClimateQuoterStep();
+}
+
+function renderClimateQuoterStep() {
+  const container = document.getElementById('climate-quoter-content');
+  const step = climateQuoterState.step;
+  const totalSteps = climateQuoterState.totalSteps;
+  const isSummary = step > totalSteps;
+
+  const displayStep = Math.min(step, totalSteps);
+  const progressPercent = Math.round((displayStep / totalSteps) * 100);
+
+  let html = '';
+
+  html += `
+    <div class="sq-header">
+      <div class="sq-header-left">
+        ${step > 1 ? `<button class="sq-back-btn" onclick="prevClimateStep()">‹</button>` : ''}
+        <div class="sq-icon-wrap" style="background:linear-gradient(135deg, var(--violeta), #4E3899);"><svg class="sq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a5 5 0 0 1 5 5c0 2-1 3-2 4.5S13 14 13 16H11c0-2-.5-2.5-2-4.5S7 9 7 7a5 5 0 0 1 5-5z" fill="currentColor" fill-opacity="0.2"/><line x1="10" y1="20" x2="14" y2="20"/><line x1="10" y1="22" x2="14" y2="22"/></svg></div>
+        <div><h2 class="sq-title">Climatización</h2><p class="sq-subtitle">Precotización rápida</p></div>
+      </div>
+      <button class="sq-close-btn" onclick="closeClimateQuoter()">×</button>
+    </div>`;
+
+  if (!isSummary) {
+    html += `
+      <div class="sq-progress">
+        <div class="sq-progress-info"><span>Paso ${displayStep} de ${totalSteps}</span><span>${progressPercent}%</span></div>
+        <div class="sq-progress-bar"><div class="sq-progress-fill" style="width: ${progressPercent}%"></div></div>
+      </div>`;
+  }
+
+  // 1-Dirección → 2-Necesidad → 3-Emplazamiento → 4-Aislación → 5-Ventanas → 6-Uso → 7-Equipo → 8-Cotización → 9-Agendar
+  if (step === 1) {
+    html += renderClimateStep1();
+  } else if (step === 2) {
+    html += renderClimateStep2();
+  } else if (step === 3) {
+    html += renderClimateStep3();
+  } else if (step === 4) {
+    html += renderClimateStep4();
+  } else if (step === 5) {
+    html += renderClimateStep5();
+  } else if (step === 6) {
+    html += renderClimateStep6();
+  } else if (step === 7) {
+    html += renderClimateStep7();
+  } else if (step === 8 && !climateQuoterState.paymentSuccess) {
+    html += renderClimateQuoteStep();
+  } else if (step === 9 && !climateQuoterState.paymentSuccess) {
+    html += renderClimateScheduleStep();
+  } else if (climateQuoterState.paymentSuccess) {
+    html += renderClimateSuccess();
+  } else {
+    html += renderClimateQuoteStep();
+  }
+
+  container.innerHTML = html;
+}
+
+// Paso 1 — ¿Necesita frío, calor o ambas?
+// Paso 1 — Dirección (para que aparezca en el agendamiento de visitas y el descargable)
+function renderClimateStep1() {
+  const data = climateQuoterState.data;
+  return `
+    <div class="sq-step-content">
+      <div class="sq-step-icon blue">📍</div>
+      <h3 class="sq-step-title">Confirma tu dirección</h3>
+      <p class="sq-step-desc">Donde se realizaría la instalación</p>
+
+      <div class="sq-map-preview">
+        <div class="sq-map-pin">📍</div>
+        <div class="sq-map-label">Tu ubicación</div>
+      </div>
+
+      <div class="sq-field">
+        <label>Dirección de instalación</label>
+        <input type="text" id="cl-address" placeholder="Ingresa tu dirección" value="${data.address}" oninput="climateQuoterState.data.address = this.value; clUpdateStep1Button();">
+      </div>
+
+      <button class="sq-btn-primary ${!data.address ? 'disabled' : ''}" id="cl-step1-btn" onclick="if(climateQuoterState.data.address) nextClimateStep()">
+        📍 Confirmar dirección
+      </button>
+    </div>`;
+}
+
+function clUpdateStep1Button() {
+  const btn = document.getElementById('cl-step1-btn');
+  if (!btn) return;
+  btn.classList.toggle('disabled', !climateQuoterState.data.address);
+}
+
+function renderClimateStep2() {
+  const data = climateQuoterState.data;
+  return `
+    <div class="sq-step-content">
+      <div class="sq-step-icon purple">🌡️</div>
+      <h3 class="sq-step-title">¿Qué necesitas climatizar?</h3>
+      <p class="sq-step-desc">Elige una opción</p>
+
+      <div class="sq-options-grid-3">
+        <button class="sq-option-card ${data.necesidad === 'frio' ? 'selected' : ''}" onclick="climateQuoterState.data.necesidad = 'frio'; renderClimateQuoterStep();">
+          <span class="sq-option-icon">❄️</span>
+          <p class="sq-option-label">Frío</p>
+        </button>
+        <button class="sq-option-card ${data.necesidad === 'calor' ? 'selected' : ''}" onclick="climateQuoterState.data.necesidad = 'calor'; renderClimateQuoterStep();">
+          <span class="sq-option-icon">🔥</span>
+          <p class="sq-option-label">Calor</p>
+        </button>
+        <button class="sq-option-card ${data.necesidad === 'ambas' ? 'selected' : ''}" onclick="climateQuoterState.data.necesidad = 'ambas'; renderClimateQuoterStep();">
+          <span class="sq-option-icon">❄️🔥</span>
+          <p class="sq-option-label">Ambas</p>
+        </button>
+      </div>
+
+      <button class="sq-btn-primary ${!data.necesidad ? 'disabled' : ''}" onclick="if(climateQuoterState.data.necesidad) nextClimateStep()">Continuar</button>
+    </div>`;
+}
+
+// Paso 2 — m² del emplazamiento + altura del techo
+function renderClimateStep3() {
+  const data = climateQuoterState.data;
+  const canContinue = parseFloat(data.areaM2) > 0 && parseFloat(data.alturaTecho) > 0;
+
+  return `
+    <div class="sq-step-content">
+      <div class="sq-step-icon blue">📐</div>
+      <h3 class="sq-step-title">Datos del emplazamiento</h3>
+      <p class="sq-step-desc">Superficie y altura del espacio a climatizar</p>
+
+      <div class="sq-field">
+        <label>m² del emplazamiento</label>
+        <input type="number" id="cl-area" min="0" step="1" placeholder="Ej: 60" value="${data.areaM2}" oninput="climateQuoterState.data.areaM2 = this.value; clUpdateStep3Button();">
+      </div>
+
+      <div class="sq-field">
+        <label>Altura del techo (metros)</label>
+        <input type="number" id="cl-altura" min="0" step="0.1" placeholder="Ej: 2.4" value="${data.alturaTecho}" oninput="climateQuoterState.data.alturaTecho = this.value; clUpdateStep3Button();">
+      </div>
+
+      <div class="sq-btn-row">
+        <button class="sq-btn-secondary" onclick="prevClimateStep()">‹ Volver</button>
+        <button class="sq-btn-primary ${!canContinue ? 'disabled' : ''}" id="cl-step3-btn" onclick="if(parseFloat(climateQuoterState.data.areaM2)>0 && parseFloat(climateQuoterState.data.alturaTecho)>0) nextClimateStep()">Continuar</button>
+      </div>
+    </div>`;
+}
+
+function clUpdateStep3Button() {
+  const btn = document.getElementById('cl-step3-btn');
+  if (!btn) return;
+  const data = climateQuoterState.data;
+  const ok = parseFloat(data.areaM2) > 0 && parseFloat(data.alturaTecho) > 0;
+  btn.classList.toggle('disabled', !ok);
+}
+
+// Paso 3 — Tipo de aislación existente
+function renderClimateStep4() {
+  const data = climateQuoterState.data;
+  return `
+    <div class="sq-step-content">
+      <div class="sq-step-icon amber">🧱</div>
+      <h3 class="sq-step-title">Tipo de aislación existente</h3>
+      <p class="sq-step-desc">Elige la que más se parece a tu espacio</p>
+
+      <div class="sq-options-grid-3">
+        <button class="sq-option-card ${data.aislacion === 'liviana' ? 'selected' : ''}" onclick="climateQuoterState.data.aislacion = 'liviana'; renderClimateQuoterStep();">
+          <span class="sq-option-icon">🪶</span>
+          <p class="sq-option-label">Liviana</p>
+        </button>
+        <button class="sq-option-card ${data.aislacion === 'estandar' ? 'selected' : ''}" onclick="climateQuoterState.data.aislacion = 'estandar'; renderClimateQuoterStep();">
+          <span class="sq-option-icon">🧱</span>
+          <p class="sq-option-label">Estándar</p>
+        </button>
+        <button class="sq-option-card ${data.aislacion === 'alta' ? 'selected' : ''}" onclick="climateQuoterState.data.aislacion = 'alta'; renderClimateQuoterStep();">
+          <span class="sq-option-icon">🛡️</span>
+          <p class="sq-option-label">Alta aislación</p>
+        </button>
+      </div>
+
+      <div class="sq-btn-row">
+        <button class="sq-btn-secondary" onclick="prevClimateStep()">‹ Volver</button>
+        <button class="sq-btn-primary ${!data.aislacion ? 'disabled' : ''}" onclick="if(climateQuoterState.data.aislacion) nextClimateStep()">Continuar</button>
+      </div>
+    </div>`;
+}
+
+// Paso 4 — m² de ventanas por orientación (Norte, Sur, Este, Oeste)
+function renderClimateStep5() {
+  const data = climateQuoterState.data;
+  const keys = ['ventanaNorte', 'ventanaSur', 'ventanaEste', 'ventanaOeste'];
+  const canContinue = keys.every(k => data[k] !== '' && parseFloat(data[k]) >= 0);
+
+  return `
+    <div class="sq-step-content">
+      <div class="sq-step-icon blue">🪟</div>
+      <h3 class="sq-step-title">m² de ventanas por orientación</h3>
+      <p class="sq-step-desc">Ingresa 0 si no hay ventanas en ese lado</p>
+
+      <div class="sq-field-grid-2">
+        <div class="sq-field">
+          <label>Norte</label>
+          <input type="number" id="cl-vent-norte" min="0" step="0.1" placeholder="Ej: 4" value="${data.ventanaNorte}" oninput="climateQuoterState.data.ventanaNorte = this.value; clUpdateStep5Button();">
+        </div>
+        <div class="sq-field">
+          <label>Sur</label>
+          <input type="number" id="cl-vent-sur" min="0" step="0.1" placeholder="Ej: 2" value="${data.ventanaSur}" oninput="climateQuoterState.data.ventanaSur = this.value; clUpdateStep5Button();">
+        </div>
+        <div class="sq-field">
+          <label>Este</label>
+          <input type="number" id="cl-vent-este" min="0" step="0.1" placeholder="Ej: 3" value="${data.ventanaEste}" oninput="climateQuoterState.data.ventanaEste = this.value; clUpdateStep5Button();">
+        </div>
+        <div class="sq-field">
+          <label>Oeste</label>
+          <input type="number" id="cl-vent-oeste" min="0" step="0.1" placeholder="Ej: 3" value="${data.ventanaOeste}" oninput="climateQuoterState.data.ventanaOeste = this.value; clUpdateStep5Button();">
+        </div>
+      </div>
+
+      <div class="sq-btn-row">
+        <button class="sq-btn-secondary" onclick="prevClimateStep()">‹ Volver</button>
+        <button class="sq-btn-primary ${!canContinue ? 'disabled' : ''}" id="cl-step5-btn" onclick="if(['ventanaNorte','ventanaSur','ventanaEste','ventanaOeste'].every(k => climateQuoterState.data[k] !== '' && parseFloat(climateQuoterState.data[k])>=0)) nextClimateStep()">Continuar</button>
+      </div>
+    </div>`;
+}
+
+function clUpdateStep5Button() {
+  const btn = document.getElementById('cl-step5-btn');
+  if (!btn) return;
+  const data = climateQuoterState.data;
+  const keys = ['ventanaNorte', 'ventanaSur', 'ventanaEste', 'ventanaOeste'];
+  const ok = keys.every(k => data[k] !== '' && parseFloat(data[k]) >= 0);
+  btn.classList.toggle('disabled', !ok);
+}
+
+// Paso 5 — Uso: residencial, comercial, industrial
+function renderClimateStep6() {
+  const data = climateQuoterState.data;
+  return `
+    <div class="sq-step-content">
+      <div class="sq-step-icon green">🏢</div>
+      <h3 class="sq-step-title">¿Cuál es el uso del espacio?</h3>
+      <p class="sq-step-desc">Elige una opción</p>
+
+      <div class="sq-options-grid-3">
+        <button class="sq-option-card ${data.uso === 'residencial' ? 'selected' : ''}" onclick="climateQuoterState.data.uso = 'residencial'; renderClimateQuoterStep();">
+          <span class="sq-option-icon">🏠</span>
+          <p class="sq-option-label">Residencial</p>
+        </button>
+        <button class="sq-option-card ${data.uso === 'comercial' ? 'selected' : ''}" onclick="climateQuoterState.data.uso = 'comercial'; renderClimateQuoterStep();">
+          <span class="sq-option-icon">🏬</span>
+          <p class="sq-option-label">Comercial</p>
+        </button>
+        <button class="sq-option-card ${data.uso === 'industrial' ? 'selected' : ''}" onclick="climateQuoterState.data.uso = 'industrial'; renderClimateQuoterStep();">
+          <span class="sq-option-icon">🏭</span>
+          <p class="sq-option-label">Industrial</p>
+        </button>
+      </div>
+
+      <div class="sq-btn-row">
+        <button class="sq-btn-secondary" onclick="prevClimateStep()">‹ Volver</button>
+        <button class="sq-btn-primary ${!data.uso ? 'disabled' : ''}" onclick="if(climateQuoterState.data.uso) nextClimateStep()">Continuar</button>
+      </div>
+    </div>`;
+}
+
+// Paso 6 — Tipo de equipo: fijo o portátil
+function renderClimateStep7() {
+  const data = climateQuoterState.data;
+  return `
+    <div class="sq-step-content">
+      <div class="sq-step-icon purple">❄️</div>
+      <h3 class="sq-step-title">¿Qué tipo de equipo prefieres?</h3>
+      <p class="sq-step-desc">Elige una opción</p>
+
+      <div class="sq-options-grid" style="margin-bottom:22px;">
+        <button class="sq-option-card ${data.tipoEquipo === 'fijo' ? 'selected' : ''}" onclick="climateQuoterState.data.tipoEquipo = 'fijo'; renderClimateQuoterStep();">
+          <span class="sq-option-icon">🧊</span>
+          <p class="sq-option-label">Fijo</p>
+          <p class="sq-option-sublabel">Instalación permanente en muro</p>
+        </button>
+        <button class="sq-option-card ${data.tipoEquipo === 'portatil' ? 'selected' : ''}" onclick="climateQuoterState.data.tipoEquipo = 'portatil'; renderClimateQuoterStep();">
+          <span class="sq-option-icon">🧳</span>
+          <p class="sq-option-label">Portátil</p>
+          <p class="sq-option-sublabel">Se traslada entre ambientes</p>
+        </button>
+      </div>
+
+      <div class="sq-btn-row">
+        <button class="sq-btn-secondary" onclick="prevClimateStep()">‹ Volver</button>
+        <button class="sq-btn-primary ${!data.tipoEquipo ? 'disabled' : ''}" onclick="if(climateQuoterState.data.tipoEquipo) nextClimateStep()">Ver resumen</button>
+      </div>
+    </div>`;
+}
+
+// Paso 8 — Cotización: equipo recomendado + inversión + descargar/agendar
+function renderClimateQuoteStep() {
+  const data = climateQuoterState.data;
+  const q = climateQuoterState.quotation;
+
+  const necesidadLabel = { frio: 'Frío', calor: 'Calor', ambas: 'Frío y calor' }[data.necesidad] || '—';
+  const equipoTipoLabel = { fijo: 'Split Muro', portatil: 'Portátil' }[data.tipoEquipo] || '—';
+
+  if (!q || !q.equipo) {
+    return `
+      <div class="sq-step-content">
+        <div class="sq-info-box blue" style="text-align:left;">
+          <span>⚠️</span>
+          <p>No se pudo calcular la cotización. Vuelve a intentarlo.</p>
+        </div>
+        <button class="sq-btn-secondary" style="width:100%;" onclick="climateQuoterState.step = 1; renderClimateQuoterStep();">Editar respuestas</button>
+      </div>`;
+  }
+
+  return `
+    <div class="sq-step-content">
+      <div class="sq-quote-card" style="background:linear-gradient(135deg, #7253C8, #4E3899);">
+        <div class="sq-quote-header">
+          <h3>Equipo recomendado</h3>
+          <span class="sq-quote-badge">Precotización</span>
+        </div>
+
+        <div class="sq-quote-stats">
+          <div><p class="sq-stat-label">Tipo</p><p class="sq-stat-value">${equipoTipoLabel}</p></div>
+          <div><p class="sq-stat-label">Modelo</p><p class="sq-stat-value">${q.equipo.modelo}</p></div>
+        </div>
+
+        <div class="sq-battery-info">
+          ${q.cargaFrioBTU ? `<div class="sq-battery-info-header">❄️ Carga de frío: ${q.cargaFrioBTU.toLocaleString('es-CL')} BTU/h</div>` : ''}
+          ${q.cargaCalorBTU ? `<div class="sq-battery-info-header">🔥 Carga de calor: ${q.cargaCalorBTU.toLocaleString('es-CL')} BTU/h</div>` : ''}
+          <div class="sq-battery-info-stats">
+            ${q.cargaFrioBTU ? `<div><p class="sq-stat-label">Capacidad frío del equipo</p><p class="sq-stat-value">${q.equipo.capFrioReal.toLocaleString('es-CL')} BTU/h</p></div>` : ''}
+            ${q.cargaCalorBTU ? `<div><p class="sq-stat-label">Capacidad calor del equipo</p><p class="sq-stat-value">${q.equipo.capCalorReal.toLocaleString('es-CL')} BTU/h</p></div>` : ''}
+          </div>
+        </div>
+
+        <div class="sq-quote-total">
+          <span>Inversión total</span>
+          <span class="sq-quote-price">$${(q.totalCost/1000000).toFixed(1)}M</span>
+        </div>
+      </div>
+
+      ${q.advertencia ? `
+        <div class="sq-info-box blue" style="text-align:left;">
+          <span>⚠️</span>
+          <p>${q.advertencia}</p>
+        </div>
+      ` : ''}
+
+      <div class="sq-address-box">
+        <span>📍</span>
+        <div><p class="sq-address-label">Dirección de instalación</p><p class="sq-address-value">${data.address}</p></div>
+        <button class="sq-edit-btn" onclick="climateQuoterState.step = 1; renderClimateQuoterStep();">Editar</button>
+      </div>
+
+      <div class="sq-share-row">
+        <button class="sq-share-btn" onclick="sqRequestDownload('climate')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#4b5563" stroke-width="2" style="width:18px;height:18px"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          <span>Descargar</span>
+        </button>
+        <button class="sq-share-btn">
+          <svg viewBox="0 0 24 24" fill="#22c55e" style="width:18px;height:18px"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/></svg>
+          <span>WhatsApp</span>
+        </button>
+        <button class="sq-share-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" style="width:18px;height:18px"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          <span>Email</span>
+        </button>
+      </div>
+
+      <div class="sq-btn-row">
+        <button class="sq-btn-icon" onclick="prevClimateStep()">‹</button>
+        <button class="sq-btn-primary" style="background:linear-gradient(135deg, #7253C8, #4E3899);" onclick="nextClimateStep()">📅 Agendar visita técnica</button>
+      </div>
+    </div>`;
+}
+
+// Paso 9 — Agendar visita técnica (nombre, teléfono, calendario, horario, pago)
+function renderClimateScheduleStep() {
+  const data = climateQuoterState.data;
+  const times = ['09:00 - 12:00', '12:00 - 15:00', '15:00 - 18:00', '18:00 - 20:00'];
+  const canPay = data.clientName.trim() && data.clientPhone.trim() && data.visitDate && data.visitTime;
+
+  return `
+    <div class="sq-step-content">
+      <div class="sq-step-icon purple">📅</div>
+      <h3 class="sq-step-title">Agenda tu visita técnica</h3>
+      <p class="sq-step-desc">Un experto evaluará tu instalación y confirmará la cotización</p>
+
+      <div class="sq-field">
+        <label>Nombre completo</label>
+        <input type="text" id="cl-client-name" placeholder="Ej: María Pérez" value="${data.clientName}" oninput="climateQuoterState.data.clientName = this.value; climateUpdateStep9Button();">
+      </div>
+      <div class="sq-field">
+        <label>Teléfono de contacto</label>
+        <input type="tel" id="cl-client-phone" placeholder="Ej: +56 9 1234 5678" value="${data.clientPhone}" oninput="climateQuoterState.data.clientPhone = this.value; climateUpdateStep9Button();">
+      </div>
+
+      <div class="sq-schedule-section">
+        <label class="sq-schedule-label">Selecciona fecha</label>
+        ${climateRenderCalendar()}
+      </div>
+
+      <div class="sq-schedule-section">
+        <label class="sq-schedule-label">Horario preferido</label>
+        <div class="sq-time-grid">
+          ${times.map(t => `
+            <button class="sq-time-btn ${data.visitTime === t ? 'selected' : ''}" onclick="climateQuoterState.data.visitTime = '${t}'; renderClimateQuoterStep();">${t}</button>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="sq-payment-card">
+        <div class="sq-payment-header">
+          <span>Costo visita técnica</span>
+          <span class="sq-payment-price">$25.000</span>
+        </div>
+
+        <p class="sq-payment-method-label">Método de pago</p>
+
+        <div class="sq-payment-option selected">
+          <div class="sq-payment-option-icon blue">💳</div>
+          <div class="sq-payment-option-info">
+            <p class="sq-payment-option-title">Tarjeta de crédito/débito</p>
+            <p class="sq-payment-option-desc">Visa, Mastercard, Amex</p>
+          </div>
+          <div class="sq-payment-check">✓</div>
+        </div>
+
+        <p class="sq-payment-note">* Este monto se descuenta del presupuesto final si contratas</p>
+
+        <div class="sq-btn-row">
+          <button class="sq-btn-icon dark" onclick="prevClimateStep()">‹</button>
+          <button class="sq-btn-primary ${!canPay ? 'disabled' : ''}" id="cl-step9-pay-btn" onclick="if(climateQuoterState.data.clientName.trim() && climateQuoterState.data.clientPhone.trim() && climateQuoterState.data.visitDate && climateQuoterState.data.visitTime) processClimatePayment()">
+            🔒 Pagar $25.000
+          </button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function climateUpdateStep9Button() {
+  const btn = document.getElementById('cl-step9-pay-btn');
+  if (!btn) return;
+  const data = climateQuoterState.data;
+  const ok = data.clientName.trim() && data.clientPhone.trim() && data.visitDate && data.visitTime;
+  btn.classList.toggle('disabled', !ok);
+}
+
+function climateChangeMonth(delta) {
+  let { year, month } = climateQuoterState.calendarNav;
+  month += delta;
+  if (month < 0) { month = 11; year--; }
+  if (month > 11) { month = 0; year++; }
+  const today = new Date();
+  if (year < today.getFullYear() || (year === today.getFullYear() && month < today.getMonth())) return;
+  climateQuoterState.calendarNav = { year, month };
+  renderClimateQuoterStep();
+}
+
+function climateSelectDate(iso) {
+  if (iso < sqTodayISO()) return;
+  climateQuoterState.data.visitDate = iso;
+  renderClimateQuoterStep();
+}
+
+function climateRenderCalendar() {
+  const { year, month } = climateQuoterState.calendarNav;
+  const todayISO = sqTodayISO();
+  const data = climateQuoterState.data;
+
+  const firstOfMonth = new Date(year, month, 1);
+  const startOffset = (firstOfMonth.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const today = new Date();
+  const isCurrentMonth = (year === today.getFullYear() && month === today.getMonth());
+
+  let cells = '';
+  for (let i = 0; i < startOffset; i++) {
+    cells += `<button class="sq-cal-day sq-cal-empty" disabled></button>`;
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    const iso = sqISO(year, month, d);
+    const isPast = iso < todayISO;
+    const isToday = iso === todayISO;
+    const isSelected = iso === data.visitDate;
+    cells += `<button class="sq-cal-day ${isToday ? 'sq-cal-today' : ''} ${isSelected ? 'selected' : ''}" ${isPast ? 'disabled' : ''} onclick="climateSelectDate('${iso}')">${d}</button>`;
+  }
+
+  return `
+    <div class="sq-calendar">
+      <div class="sq-cal-header">
+        <button class="sq-cal-nav" onclick="climateChangeMonth(-1)" ${isCurrentMonth ? 'disabled' : ''}>‹</button>
+        <span class="sq-cal-month">${SQ_MESES[month]} ${year}</span>
+        <button class="sq-cal-nav" onclick="climateChangeMonth(1)">›</button>
+      </div>
+      <div class="sq-cal-weekdays">${SQ_DIAS_SEMANA.map(d => `<span>${d}</span>`).join('')}</div>
+      <div class="sq-cal-grid">${cells}</div>
+      ${data.visitDate ? `<div class="sq-cal-selected-label">Visita: <strong>${sqFormatHuman(data.visitDate)}</strong></div>` : ''}
+    </div>`;
+}
+
+function processClimatePayment() {
+  climateSaveBooking();
+  climateQuoterState.paymentSuccess = true;
+  renderClimateQuoterStep();
+}
+
+function climateSaveBooking() {
+  const data = climateQuoterState.data;
+  const q = climateQuoterState.quotation;
+  const booking = {
+    id: 'b_' + Date.now(),
+    product: 'Climatización',
+    clientName: data.clientName,
+    clientPhone: data.clientPhone,
+    address: data.address,
+    visitDate: data.visitDate,
+    visitTime: data.visitTime,
+    totalCost: q ? q.totalCost : null,
+    detail: q ? `${q.equipo.modelo} (${{fijo:'Split Muro',portatil:'Portátil'}[data.tipoEquipo] || ''})` : '—',
+    createdAt: new Date().toISOString()
+  };
+
+  let bookings = [];
+  try {
+    bookings = JSON.parse(localStorage.getItem('abastible_bookings') || '[]');
+  } catch (e) {
+    bookings = [];
+  }
+  bookings.push(booking);
+  localStorage.setItem('abastible_bookings', JSON.stringify(bookings));
+
+  sqSyncToGoogleCalendar(booking);
+}
+
+function renderClimateSuccess() {
+  const data = climateQuoterState.data;
+  return `
+    <div class="sq-step-content sq-success">
+      <div class="sq-success-icon">✅</div>
+      <h3 class="sq-success-title">¡Visita agendada!</h3>
+      <p class="sq-success-desc">Te esperamos, ${data.clientName}, el ${sqFormatHuman(data.visitDate)} entre ${data.visitTime}</p>
+
+      <div class="sq-success-steps">
+        <p class="sq-success-steps-title">Próximos pasos:</p>
+        <ul>
+          <li>✓ Recibirás confirmación por email</li>
+          <li>✓ Te llamaremos 1 hora antes</li>
+          <li>✓ La visita dura ~45 minutos</li>
+        </ul>
+      </div>
+
+      <div class="sq-success-payment">
+        <div class="sq-success-payment-row">
+          <span>Pagado con Tarjeta</span>
+          <span class="sq-success-payment-amount">$25.000</span>
+        </div>
+      </div>
+
+      <button class="sq-btn-primary" style="background:linear-gradient(135deg, #7253C8, #4E3899);" onclick="closeClimateQuoter()">Volver al inicio</button>
+    </div>`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
    PANEL INTERNO — revisión de citas agendadas (calendario ligado a la app)
    ══════════════════════════════════════════════════════════════════════════ */
 
@@ -2104,7 +2902,7 @@ let sqPendingDownloadModule = null; // 'solar' | 'ev'
 // si no, primero pide nombre, correo y teléfono.
 function sqRequestDownload(moduleType) {
   sqPendingDownloadModule = moduleType;
-  const state = moduleType === 'solar' ? solarQuoterState : evQuoterState;
+  const state = moduleType === 'solar' ? solarQuoterState : (moduleType === 'ev' ? evQuoterState : climateQuoterState);
   const d = state.data;
 
   if (d.clientName && d.clientEmail && d.clientPhone) {
@@ -2138,7 +2936,7 @@ function sqSubmitDownloadContact() {
   const phone = document.getElementById('dl-contact-phone').value.trim();
   if (!name || !email || !phone) return;
 
-  const state = sqPendingDownloadModule === 'solar' ? solarQuoterState : evQuoterState;
+  const state = sqPendingDownloadModule === 'solar' ? solarQuoterState : (sqPendingDownloadModule === 'ev' ? evQuoterState : climateQuoterState);
   state.data.clientName = name;
   state.data.clientEmail = email;
   state.data.clientPhone = phone;
@@ -2149,7 +2947,8 @@ function sqSubmitDownloadContact() {
 
 function sqTriggerDownload(moduleType) {
   if (moduleType === 'solar') downloadSolarQuotePDF();
-  else downloadEVQuotePDF();
+  else if (moduleType === 'ev') downloadEVQuotePDF();
+  else downloadClimateQuotePDF();
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -2302,7 +3101,13 @@ function buildSolarPdfSections(q, data) {
     </div>
   `);
 
-  sections.push(buildTimelineSectionHtml(incluye));
+  const beneficios = [
+    { icon: '📱', label: 'Monitoreo remoto vía app' },
+    { icon: '🛡️', label: 'Garantía de instalación' },
+    { icon: '🔧', label: 'Servicio post-venta' },
+    { icon: '📞', label: 'Soporte técnico' }
+  ];
+  sections.push(buildTimelineSectionHtml(incluye, beneficios));
   sections.push(buildContactBlockHtml(q.monthlySavings));
   sections.push(buildDisclaimerBlockHtml(q.selfSharePct, q.injectionSharePct, q.includesBattery));
 
@@ -2312,6 +3117,12 @@ function buildSolarPdfSections(q, data) {
 function buildEVPdfSections(q, data) {
   // Electromovilidad no incluye "Estudio de consumos" (eso es exclusivo de Solar)
   const incluye = ['Estudio de instalaciones existentes', 'Diseño adaptado a necesidades', 'Instalación completa', 'Certificación SEC'];
+  const beneficios = [
+    { icon: '🛡️', label: 'Garantía de instalación' },
+    { icon: '🔧', label: 'Servicio post-venta' },
+    { icon: '📞', label: 'Soporte técnico' },
+    { icon: '✅', label: 'Cumple normativa SEC' }
+  ];
 
   const sections = [];
 
@@ -2332,52 +3143,53 @@ function buildEVPdfSections(q, data) {
     </table>
   `);
 
+  // Título: nombre del proyecto + cantidad de puntos de carga destacada (mismo patrón que Solar con el kWp)
   sections.push(`
-    <div style="padding:12px 24px 10px;">
-      <div style="display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;">
-        <div style="max-width:290px;">
-          <h1 style="font-size:15px; font-weight:800; color:#0D1B2A; margin:0; line-height:1.25;">PROYECTO DE ELECTROMOVILIDAD RECOMENDADO</h1>
+    <div style="padding:14px 24px 10px;">
+      <p style="font-size:9px; color:#9ca3af; font-weight:800; letter-spacing:.5px; margin:0 0 4px;">PROYECTO RECOMENDADO</p>
+      <h1 style="font-size:17px; font-weight:800; color:#0D1B2A; margin:0 0 7px; line-height:1.3;">Electromovilidad — <span style="color:#22c55e;">${q.numChargers} punto${q.numChargers > 1 ? 's' : ''} de carga</span></h1>
+      <p style="font-size:10px; color:#6b7280; margin:0;">${data.clientName || 'Cliente Abastible'} · ${data.address}</p>
+      ${data.clientEmail ? `<p style="font-size:9px; color:#9ca3af; margin:2px 0 0;">${data.clientEmail}</p>` : ''}
+      ${data.clientPhone ? `<p style="font-size:9px; color:#9ca3af; margin:2px 0 0;">${data.clientPhone}</p>` : ''}
+    </div>
+  `);
+
+  // Tu solución de carga — mismo estilo de íconos circulares que "Cómo se genera tu energía" en Solar
+  sections.push(`
+    <div style="background:#0D1B2A; padding:12px 24px;">
+      <p style="color:#fff; font-size:9px; font-weight:800; letter-spacing:.6px; margin:0 0 10px; text-align:center;">TU SOLUCIÓN DE CARGA</p>
+      <div style="display:flex; justify-content:center; gap:10px; flex-wrap:wrap;">
+        <div style="text-align:center; width:54px;">
+          <div style="width:32px; height:32px; border-radius:50%; border:1.5px solid #22c55e; display:flex; align-items:center; justify-content:center; margin:0 auto 4px; font-size:12px;">🔌</div>
+          <p style="color:#fff; font-size:7px; font-weight:700; margin:0 0 1px;">Cargadores</p>
+          <p style="color:#9fb3c8; font-size:6.5px; margin:0;">${q.numChargers} u</p>
         </div>
-        <div style="text-align:right;">
-          <p style="font-size:10.5px; font-weight:800; color:#22c55e; margin:0 0 5px;">${q.numChargers} PUNTO(S) DE CARGA</p>
-          <p style="font-size:10.5px; color:#0D1B2A; font-weight:700; margin:0;">${data.clientName || 'Cliente Abastible'}</p>
-          ${data.clientEmail ? `<p style="font-size:9.5px; color:#6b7280; margin:2px 0 0;">${data.clientEmail}</p>` : ''}
-          ${data.clientPhone ? `<p style="font-size:9.5px; color:#6b7280; margin:2px 0 0;">${data.clientPhone}</p>` : ''}
-          <p style="font-size:9.5px; color:#6b7280; margin:2px 0 0; max-width:200px;">${data.address}</p>
+        <div style="text-align:center; width:54px;">
+          <div style="width:32px; height:32px; border-radius:50%; border:1.5px solid #22c55e; display:flex; align-items:center; justify-content:center; margin:0 auto 4px; font-size:12px;">📏</div>
+          <p style="color:#fff; font-size:7px; font-weight:700; margin:0 0 1px;">Cableado</p>
+          <p style="color:#9fb3c8; font-size:6.5px; margin:0;">${q.cableDistanceM} m</p>
+        </div>
+        <div style="text-align:center; width:54px;">
+          <div style="width:32px; height:32px; border-radius:50%; border:1.5px solid #22c55e; display:flex; align-items:center; justify-content:center; margin:0 auto 4px; font-size:12px;">🚗</div>
+          <p style="color:#fff; font-size:7px; font-weight:700; margin:0 0 1px;">Tu flota</p>
+          <p style="color:#9fb3c8; font-size:6.5px; margin:0;">lista para cargar</p>
         </div>
       </div>
     </div>
   `);
 
+  // Inversión total (sin opción de leasing para este producto)
   sections.push(`
-    <div style="background:#0D1B2A; padding:5px 24px;">
-      <p style="color:#fff; font-size:9.5px; font-weight:800; letter-spacing:.5px; margin:0; text-align:center;">EQUIPO DEL PROYECTO</p>
-    </div>
-    <div style="background:#13253d; padding:9px 24px; display:flex; gap:6px; flex-wrap:wrap; justify-content:center;">
-      <div style="background:#1c3350; border-radius:6px; padding:6px; width:62px; text-align:center;">
-        <div style="font-size:11px; margin-bottom:3px;">🔌</div>
-        <p style="color:#fff; font-size:7.5px; font-weight:800; margin:0 0 2px; line-height:1.2;">CARGADORES</p>
-        <p style="color:#FFA366; font-size:9.5px; font-weight:800; margin:0;">${q.numChargers} u</p>
+    <div style="padding:12px 24px 4px;">
+      <div style="border:2px solid #FE5100; border-radius:10px; padding:12px 14px; display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:11px; font-weight:800; color:#0D1B2A;">INVERSIÓN TOTAL</span>
+        <span style="font-size:18px; font-weight:800; color:#FE5100;">${fmtCLP0(q.totalCost)}</span>
       </div>
-      <div style="background:#1c3350; border-radius:6px; padding:6px; width:62px; text-align:center;">
-        <div style="font-size:11px; margin-bottom:3px;">📏</div>
-        <p style="color:#fff; font-size:7.5px; font-weight:800; margin:0 0 2px; line-height:1.2;">CABLEADO</p>
-        <p style="color:#FFA366; font-size:9.5px; font-weight:800; margin:0;">${q.cableDistanceM} m</p>
-      </div>
+      <p style="font-size:7.5px; color:#9ca3af; margin:6px 2px 0; line-height:1.4;">Incluye equipos, instalación y certificación SEC.</p>
     </div>
   `);
 
-  sections.push(buildIncluyeSectionHtml(incluye));
-
-  sections.push(`
-    <div style="padding:10px 24px;">
-      <div style="border:2px solid #FE5100; border-radius:8px; padding:9px 14px; display:flex; justify-content:space-between; align-items:center;">
-        <span style="font-size:10px; font-weight:800; color:#0D1B2A;">INVERSIÓN TOTAL</span>
-        <span style="font-size:15px; font-weight:800; color:#FE5100;">${fmtCLP0(q.totalCost)}</span>
-      </div>
-    </div>
-  `);
-
+  sections.push(buildTimelineSectionHtml(incluye, beneficios));
   sections.push(buildContactBlockHtml());
   sections.push(buildDisclaimerBlockHtml(null, null));
 
@@ -2388,16 +3200,33 @@ const PDF_ICON_PHONE_WHITE_B64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA
 const PDF_ICON_EMAIL_WHITE_B64 = 'data:image/png;base64,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';
 
 // Timeline numerada "Tu proyecto paso a paso" (círculos 01, 02, 03...)
-function buildTimelineSectionHtml(items) {
+function buildTimelineSectionHtml(items, beneficios) {
+  const beneficiosHtml = (beneficios || []).map(b => `
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:7px;">
+      <span style="font-size:11px;">${b.icon}</span>
+      <p style="font-size:8.5px; color:#374151; font-weight:600; margin:0; line-height:1.3;">${b.label}</p>
+    </div>
+  `).join('');
+
   return `
     <div style="padding:10px 24px 4px;">
-      <p style="font-size:10.5px; font-weight:800; color:#0D1B2A; margin:0 0 10px;">Tu proyecto paso a paso</p>
-      ${items.map((item, i) => `
-        <div style="display:flex; align-items:center; gap:10px; margin-bottom:${i < items.length - 1 ? '8' : '0'}px;">
-          <div style="width:18px; height:18px; border-radius:50%; background:#0D1B2A; color:#fff; font-size:7px; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0;">${String(i + 1).padStart(2, '0')}</div>
-          <p style="font-size:9.5px; color:#0D1B2A; font-weight:600; margin:0;">${item}</p>
+      <div style="display:flex; gap:18px;">
+        <div style="flex:1;">
+          <p style="font-size:10.5px; font-weight:800; color:#0D1B2A; margin:0 0 10px;">Tu proyecto paso a paso</p>
+          ${items.map((item, i) => `
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:${i < items.length - 1 ? '8' : '0'}px;">
+              <div style="width:18px; height:18px; border-radius:50%; background:#0D1B2A; color:#fff; font-size:7px; font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0;">${String(i + 1).padStart(2, '0')}</div>
+              <p style="font-size:9.5px; color:#0D1B2A; font-weight:600; margin:0;">${item}</p>
+            </div>
+          `).join('')}
         </div>
-      `).join('')}
+        ${beneficiosHtml ? `
+          <div style="flex:1; background:#f9fafb; border:1px solid #eee; border-radius:8px; padding:10px 12px;">
+            <p style="font-size:9px; font-weight:800; color:#0D1B2A; margin:0 0 8px;">Beneficios incluidos</p>
+            ${beneficiosHtml}
+          </div>
+        ` : ''}
+      </div>
     </div>
   `;
 }
@@ -2487,6 +3316,7 @@ async function downloadQuotePDF({ sections, fileName }) {
 
     let cursorY = 0;
     let pageStarted = false;
+    const pageTopMargin = 18; // espacio en blanco al inicio de páginas nuevas (no de la primera)
 
     for (const sectionHtml of sections) {
       container.innerHTML = sectionHtml;
@@ -2504,13 +3334,13 @@ async function downloadQuotePDF({ sections, fileName }) {
         pageStarted = true;
       } else if (cursorY + imgHeight > pageHeight) {
         doc.addPage();
-        cursorY = 0;
+        cursorY = pageTopMargin;
       }
 
       // Sección excepcionalmente más alta que una página completa: se dibuja
       // igual desde el tope de una página nueva (no debería pasar en la práctica).
-      if (imgHeight > pageHeight && cursorY === 0) {
-        doc.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      if (imgHeight > pageHeight && cursorY === pageTopMargin) {
+        doc.addImage(imgData, 'PNG', 0, cursorY, imgWidth, imgHeight);
         cursorY = pageHeight; // fuerza salto de página en la siguiente sección
       } else {
         doc.addImage(imgData, 'PNG', 0, cursorY, imgWidth, imgHeight);
@@ -2544,6 +3374,108 @@ function downloadEVQuotePDF() {
   });
 }
 
+function buildClimatePdfSections(q, data) {
+  const incluye = ['Estudio de instalaciones existentes', 'Diseño adaptado a necesidades', 'Instalación completa', 'Certificación SEC'];
+  const beneficios = [
+    { icon: '🛡️', label: 'Garantía de instalación' },
+    { icon: '🔧', label: 'Servicio post-venta' },
+    { icon: '📞', label: 'Soporte técnico' },
+    { icon: '✅', label: 'Cumple normativa SEC' }
+  ];
+
+  const necesidadIcon = { frio: '❄️', calor: '🔥', ambas: '❄️🔥' }[q.necesidad] || '🌡️';
+  const necesidadLabel = { frio: 'Frío', calor: 'Calor', ambas: 'Frío y calor' }[q.necesidad] || '—';
+  const equipoTipoLabel = { fijo: 'Split Muro', portatil: 'Portátil' }[q.tipoEquipo] || '—';
+
+  let capacidadSub;
+  if (q.cargaFrioBTU && q.cargaCalorBTU) {
+    capacidadSub = `❄️ ${q.equipo.capFrioReal.toLocaleString('es-CL')} / 🔥 ${q.equipo.capCalorReal.toLocaleString('es-CL')} BTU/h`;
+  } else if (q.cargaFrioBTU) {
+    capacidadSub = `${q.equipo.capFrioReal.toLocaleString('es-CL')} BTU/h`;
+  } else {
+    capacidadSub = `${q.equipo.capCalorReal.toLocaleString('es-CL')} BTU/h`;
+  }
+
+  const sections = [];
+
+  sections.push(`
+    <div style="padding:12px 24px; border-bottom:1px solid #eee;">
+      <img src="${PDF_LOGO_B64}" style="height:20px;width:auto;display:block;">
+    </div>
+  `);
+
+  const fechaEmisionCl = new Date().toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' });
+  sections.push(`
+    <table style="width:100%; border-collapse:collapse; font-size:9px; background:#f7f8fa;">
+      <tr>
+        <td style="padding:6px 24px; color:#6b7280; font-weight:700;">N° COTIZACIÓN <span style="color:#0D1B2A;">${q.quoteNumber}</span></td>
+        <td style="padding:6px 24px; color:#6b7280; font-weight:700;">FECHA DE EMISIÓN <span style="color:#0D1B2A;">${fechaEmisionCl}</span></td>
+        <td style="padding:6px 24px; color:#6b7280; font-weight:700;">VALIDEZ DE LA OFERTA <span style="color:#0D1B2A;">15 días</span></td>
+      </tr>
+    </table>
+  `);
+
+  sections.push(`
+    <div style="padding:14px 24px 10px;">
+      <p style="font-size:9px; color:#9ca3af; font-weight:800; letter-spacing:.5px; margin:0 0 4px;">PROYECTO RECOMENDADO</p>
+      <h1 style="font-size:17px; font-weight:800; color:#0D1B2A; margin:0 0 7px; line-height:1.3;">Climatización — <span style="color:#7253C8;">${q.equipo.modelo}</span></h1>
+      <p style="font-size:10px; color:#6b7280; margin:0;">${data.clientName || 'Cliente Abastible'} · ${data.address}</p>
+      ${data.clientEmail ? `<p style="font-size:9px; color:#9ca3af; margin:2px 0 0;">${data.clientEmail}</p>` : ''}
+      ${data.clientPhone ? `<p style="font-size:9px; color:#9ca3af; margin:2px 0 0;">${data.clientPhone}</p>` : ''}
+    </div>
+  `);
+
+  sections.push(`
+    <div style="background:#0D1B2A; padding:12px 24px;">
+      <p style="color:#fff; font-size:9px; font-weight:800; letter-spacing:.6px; margin:0 0 10px; text-align:center;">TU SOLUCIÓN DE CLIMATIZACIÓN</p>
+      <div style="display:flex; justify-content:center; gap:10px; flex-wrap:wrap;">
+        <div style="text-align:center; width:60px;">
+          <div style="width:32px; height:32px; border-radius:50%; border:1.5px solid #7253C8; display:flex; align-items:center; justify-content:center; margin:0 auto 4px; font-size:12px;">${necesidadIcon}</div>
+          <p style="color:#fff; font-size:7px; font-weight:700; margin:0 0 1px;">Necesidad</p>
+          <p style="color:#9fb3c8; font-size:6.5px; margin:0;">${necesidadLabel}</p>
+        </div>
+        <div style="text-align:center; width:60px;">
+          <div style="width:32px; height:32px; border-radius:50%; border:1.5px solid #7253C8; display:flex; align-items:center; justify-content:center; margin:0 auto 4px; font-size:12px;">${q.tipoEquipo === 'portatil' ? '🧳' : '🧊'}</div>
+          <p style="color:#fff; font-size:7px; font-weight:700; margin:0 0 1px;">Tipo</p>
+          <p style="color:#9fb3c8; font-size:6.5px; margin:0;">${equipoTipoLabel}</p>
+        </div>
+        <div style="text-align:center; width:76px;">
+          <div style="width:32px; height:32px; border-radius:50%; border:1.5px solid #7253C8; display:flex; align-items:center; justify-content:center; margin:0 auto 4px; font-size:12px;">⚡</div>
+          <p style="color:#fff; font-size:7px; font-weight:700; margin:0 0 1px;">Capacidad</p>
+          <p style="color:#9fb3c8; font-size:6.5px; margin:0;">${capacidadSub}</p>
+        </div>
+      </div>
+    </div>
+  `);
+
+  sections.push(`
+    <div style="padding:12px 24px 4px;">
+      <div style="border:2px solid #FE5100; border-radius:10px; padding:12px 14px; display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:11px; font-weight:800; color:#0D1B2A;">INVERSIÓN TOTAL</span>
+        <span style="font-size:18px; font-weight:800; color:#FE5100;">${fmtCLP0(q.totalCost)}</span>
+      </div>
+      <p style="font-size:7.5px; color:#9ca3af; margin:6px 2px 0; line-height:1.4;">Incluye equipo e instalación.</p>
+    </div>
+  `);
+
+  sections.push(buildTimelineSectionHtml(incluye, beneficios));
+  sections.push(buildContactBlockHtml());
+  sections.push(buildDisclaimerBlockHtml(null, null));
+
+  return sections;
+}
+
+function downloadClimateQuotePDF() {
+  const q = climateQuoterState.quotation;
+  const data = climateQuoterState.data;
+  if (!q) return;
+  downloadQuotePDF({
+    sections: buildClimatePdfSections(q, data),
+    fileName: 'cotizacion-soluciones-abastible.pdf'
+  });
+}
+
 </script>
 </body>
 </html>
+
