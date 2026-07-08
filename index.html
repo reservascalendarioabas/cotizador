@@ -453,6 +453,13 @@ body {
 /* Grilla 2x2 para inputs numéricos cortos (ej: ventanas por orientación) */
 .sq-field-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
 .sq-field-grid-2 .sq-field { margin-bottom: 0; }
+
+.sq-room-block { border: 1.5px solid #e5e7eb; border-radius: 14px; padding: 16px; margin-bottom: 16px; text-align: left; background: #fafafa; }
+.sq-room-block .sq-options-grid-3,
+.sq-room-block .sq-options-grid,
+.sq-room-block .sq-field-grid-2 { margin-bottom: 0; }
+.sq-room-block .sq-field:last-child { margin-bottom: 0; }
+.sq-room-block-title { font-size: 12.5px; font-weight: 800; color: #7253C8; margin: 0 0 12px; letter-spacing: .2px; }
 .sq-option-desc { font-size: 12px; color: #6b7280; margin: 0; }
 .sq-option-kw { font-size: 12px; color: #22c55e; font-weight: 600; margin: 4px 0 0; }
 
@@ -1606,6 +1613,7 @@ const evQuoterState = {
     address: 'Apoquindo 5550, Las Condes',
     numChargers: '',
     cableDistanceM: '',
+    tipoCarga: null,       // 'propia' | 'terceros'
     clientName: '',
     clientEmail: '',
     clientPhone: '',
@@ -1626,6 +1634,7 @@ function openEVQuoter() {
     address: 'Apoquindo 5550, Las Condes',
     numChargers: '',
     cableDistanceM: '',
+    tipoCarga: null,
     clientName: '',
     clientEmail: '',
     clientPhone: '',
@@ -1651,25 +1660,32 @@ function calculateEVQuotation() {
   const COSTO_CARGADOR = 800000;          // CLP por cargador (equipo)
   const COSTO_INSTALACION_PUNTO = 400000; // CLP por punto de carga instalado (mano de obra)
   const COSTO_CABLEADO_METRO = 20000;     // CLP por metro de cableado (incluye materiales y obra)
+  const COSTO_BASE_TERCEROS = 200000;     // CLP, una vez — si es carga de terceros (plataforma de pago/gestión)
+  const COSTO_TERCEROS_POR_CARGADOR = 50000; // CLP por cada cargador adicional, si es de terceros
 
   const data = evQuoterState.data;
   const numChargers = Math.max(1, parseInt(data.numChargers) || 1);
   const cableDistanceM = Math.max(0, parseFloat(data.cableDistanceM) || 0);
+  const esTerceros = data.tipoCarga === 'terceros';
 
   // El cableado se cuenta por cada punto de carga (cada uno necesita su propio
   // circuito desde el tablero eléctrico hasta el estacionamiento).
   const chargerCost = numChargers * COSTO_CARGADOR;
   const installCost = numChargers * COSTO_INSTALACION_PUNTO;
   const cableCost = numChargers * cableDistanceM * COSTO_CABLEADO_METRO;
-  const totalCost = chargerCost + installCost + cableCost;
+  const terceirosCost = esTerceros ? (COSTO_BASE_TERCEROS + numChargers * COSTO_TERCEROS_POR_CARGADOR) : 0;
+  const totalCost = chargerCost + installCost + cableCost + terceirosCost;
 
   return {
     quoteNumber: sqGenerateQuoteNumber(),
     numChargers,
     cableDistanceM,
+    tipoCarga: data.tipoCarga,
+    esTerceros,
     chargerCost,
     installCost,
     cableCost,
+    terceirosCost,
     totalCost
   };
 }
@@ -1709,7 +1725,7 @@ function evSaveBooking() {
     visitDate: data.visitDate,
     visitTime: data.visitTime,
     totalCost: q ? q.totalCost : null,
-    detail: q ? `${q.numChargers} punto(s) de carga · ${q.cableDistanceM}m de cableado` : '—',
+    detail: q ? `${q.numChargers} punto(s) de carga · ${q.cableDistanceM}m de cableado${q.esTerceros ? ' · Carga de terceros' : ' · Flota propia'}` : '—',
     createdAt: new Date().toISOString()
   };
 
@@ -1795,7 +1811,7 @@ function renderEVStep1() {
 
 function renderEVStep2() {
   const data = evQuoterState.data;
-  const canContinue = (parseInt(data.numChargers) > 0) && data.cableDistanceM !== '' && parseFloat(data.cableDistanceM) >= 0;
+  const canContinue = (parseInt(data.numChargers) > 0) && data.cableDistanceM !== '' && parseFloat(data.cableDistanceM) >= 0 && data.tipoCarga;
 
   return `
     <div class="sq-step-content">
@@ -1813,6 +1829,20 @@ function renderEVStep2() {
         <input type="number" id="ev-cable-distance" min="0" step="1" placeholder="Ej: 15" value="${data.cableDistanceM}" oninput="evQuoterState.data.cableDistanceM = this.value; evUpdateStep2Button();">
       </div>
 
+      <div class="sq-field" style="text-align:left;">
+        <label style="margin-bottom:8px;">¿Flota propia o carga de terceros?</label>
+        <div class="sq-options-grid" style="margin-bottom:0;">
+          <button class="sq-option-card ${data.tipoCarga === 'propia' ? 'selected' : ''}" onclick="evQuoterState.data.tipoCarga = 'propia'; evUpdateStep2Button(); renderEVQuoterStep();">
+            <span class="sq-option-icon">🚚</span>
+            <p class="sq-option-label">Flota propia</p>
+          </button>
+          <button class="sq-option-card ${data.tipoCarga === 'terceros' ? 'selected' : ''}" onclick="evQuoterState.data.tipoCarga = 'terceros'; evUpdateStep2Button(); renderEVQuoterStep();">
+            <span class="sq-option-icon">🅿️</span>
+            <p class="sq-option-label">Carga de terceros</p>
+          </button>
+        </div>
+      </div>
+
       <div class="sq-info-box blue">
         <span>💡</span>
         <p>No te preocupes si no estás seguro, lo verificaremos en la visita técnica.</p>
@@ -1820,7 +1850,7 @@ function renderEVStep2() {
 
       <div class="sq-btn-row">
         <button class="sq-btn-secondary" onclick="prevEVStep()">‹ Volver</button>
-        <button class="sq-btn-primary green ${!canContinue ? 'disabled' : ''}" id="ev-step2-btn" onclick="if((parseInt(evQuoterState.data.numChargers)>0) && evQuoterState.data.cableDistanceM !== '') nextEVStep()">Continuar</button>
+        <button class="sq-btn-primary green ${!canContinue ? 'disabled' : ''}" id="ev-step2-btn" onclick="if((parseInt(evQuoterState.data.numChargers)>0) && evQuoterState.data.cableDistanceM !== '' && evQuoterState.data.tipoCarga) nextEVStep()">Continuar</button>
       </div>
     </div>`;
 }
@@ -1829,17 +1859,20 @@ function evUpdateStep2Button() {
   const btn = document.getElementById('ev-step2-btn');
   if (!btn) return;
   const data = evQuoterState.data;
-  const ok = (parseInt(data.numChargers) > 0) && data.cableDistanceM !== '' && parseFloat(data.cableDistanceM) >= 0;
+  const ok = (parseInt(data.numChargers) > 0) && data.cableDistanceM !== '' && parseFloat(data.cableDistanceM) >= 0 && data.tipoCarga;
   btn.classList.toggle('disabled', !ok);
 }
 
 function renderEVQuoteVisual(q, data) {
+  const incluyeTexto = `Cargador 7kW + instalación + cableado${q.esTerceros ? ' + plataforma de pago' : ''}`;
   return `
       <div class="sq-quote-card" style="background:linear-gradient(135deg, #22c55e, #168455);">
         <div class="sq-quote-header">
           <h3>Tu solución de carga</h3>
           <span class="sq-quote-badge">Precotización</span>
         </div>
+
+        <p style="font-size:12px; color:rgba(255,255,255,0.85); margin:0 0 14px;">${incluyeTexto}</p>
 
         <div class="sq-quote-stats">
           <div><p class="sq-stat-label">Puntos de carga</p><p class="sq-stat-value">${q.numChargers} unidad(es)</p></div>
@@ -2044,17 +2077,18 @@ function renderEVSuccess() {
 
 /* ══════════════════════════════════════════════════════════════════════════
    MÓDULO CLIMATIZACIÓN
-   Por ahora este módulo solo recopila los inputs necesarios para cotizar
-   (mismo patrón visual que Solar + Almacenamiento y Electromovilidad).
-   La fórmula de cálculo (carga térmica, equipo sugerido, precio, etc.) se
-   implementará más adelante en calculateClimateQuotation().
+   Permite cotizar 1 o varias habitaciones/espacios independientes en la misma
+   visita. A partir del paso "¿Cuántas habitaciones necesitas climatizar?",
+   todos los pasos de inputs se repiten una vez por habitación (cada una con
+   su propia necesidad, m², aislación, ventanas, uso y tipo de equipo), y la
+   cotización final calcula un equipo (o combinación de equipos) por cada
+   habitación por separado.
    ══════════════════════════════════════════════════════════════════════════ */
 
-const climateQuoterState = {
-  step: 1,
-  totalSteps: 7,
-  data: {
-    address: 'Apoquindo 5550, Las Condes',
+const CLIMATE_MAX_HABITACIONES = 6; // tope razonable de habitaciones por visita
+
+function climateHabitacionVacia() {
+  return {
     necesidad: null,        // 'frio' | 'calor' | 'ambas'
     areaM2: '',
     alturaTecho: '',
@@ -2064,7 +2098,27 @@ const climateQuoterState = {
     ventanaEste: '',
     ventanaOeste: '',
     uso: null,              // 'residencial' | 'comercial' | 'industrial'
-    tipoEquipo: null,       // 'fijo' | 'portatil'
+    tipoEquipo: null        // 'fijo' | 'portatil'
+  };
+}
+
+// Ajusta el arreglo de habitaciones al número indicado en numRooms (entre 1 y
+// CLIMATE_MAX_HABITACIONES), agregando o quitando habitaciones vacías al final
+// sin tocar las que ya tenían datos cargados.
+function climateSyncRooms() {
+  const n = Math.max(1, Math.min(CLIMATE_MAX_HABITACIONES, parseInt(climateQuoterState.data.numRooms) || 0));
+  const rooms = climateQuoterState.data.rooms;
+  while (rooms.length < n) rooms.push(climateHabitacionVacia());
+  while (rooms.length > n) rooms.pop();
+}
+
+const climateQuoterState = {
+  step: 1,
+  totalSteps: 8,
+  data: {
+    address: 'Apoquindo 5550, Las Condes',
+    numRooms: '',
+    rooms: [],
     clientName: '',
     clientPhone: '',
     clientEmail: '',
@@ -2083,16 +2137,8 @@ function openClimateQuoter() {
   climateQuoterState.step = 1;
   climateQuoterState.data = {
     address: 'Apoquindo 5550, Las Condes',
-    necesidad: null,
-    areaM2: '',
-    alturaTecho: '',
-    aislacion: null,
-    ventanaNorte: '',
-    ventanaSur: '',
-    ventanaEste: '',
-    ventanaOeste: '',
-    uso: null,
-    tipoEquipo: null,
+    numRooms: '',
+    rooms: [],
     clientName: '',
     clientPhone: '',
     clientEmail: '',
@@ -2157,20 +2203,22 @@ const CLIMATE_CATALOGO_PORTATIL = [
   { modelo: 'EVPORT-14', frioBTU: 14000, calorBTU: 11600, costoEquipo: 369990, costoInstalacion: 50000 }
 ];
 
-function calculateClimateQuotation() {
-  const data = climateQuoterState.data;
-  const areaM2 = parseFloat(data.areaM2) || 0;
-  const altura = parseFloat(data.alturaTecho) || 0;
+// Calcula la carga térmica y selecciona el equipo (o combinación de equipos)
+// para UNA habitación. La lógica es la misma que antes, ahora aislada por
+// habitación para poder repetirla N veces.
+function climateComputeRoomQuote(room) {
+  const areaM2 = parseFloat(room.areaM2) || 0;
+  const altura = parseFloat(room.alturaTecho) || 0;
   const volumen = areaM2 * altura;
 
-  const personas = areaM2 / (CLIMATE_M2_POR_PERSONA[data.uso] || 20);
-  const equiposWm2 = CLIMATE_EQUIPOS_W_M2[data.uso] || 5;
-  const factorAislacion = CLIMATE_AISLACION_FACTOR[data.aislacion] || 1.0;
+  const personas = areaM2 / (CLIMATE_M2_POR_PERSONA[room.uso] || 20);
+  const equiposWm2 = CLIMATE_EQUIPOS_W_M2[room.uso] || 5;
+  const factorAislacion = CLIMATE_AISLACION_FACTOR[room.aislacion] || 1.0;
 
-  const ventN = parseFloat(data.ventanaNorte) || 0;
-  const ventS = parseFloat(data.ventanaSur) || 0;
-  const ventE = parseFloat(data.ventanaEste) || 0;
-  const ventO = parseFloat(data.ventanaOeste) || 0;
+  const ventN = parseFloat(room.ventanaNorte) || 0;
+  const ventS = parseFloat(room.ventanaSur) || 0;
+  const ventE = parseFloat(room.ventanaEste) || 0;
+  const ventO = parseFloat(room.ventanaOeste) || 0;
   const cargaVentanas = ventN * CLIMATE_ORIENTACION_FACTOR.norte
     + ventS * CLIMATE_ORIENTACION_FACTOR.sur
     + ventE * CLIMATE_ORIENTACION_FACTOR.este
@@ -2190,53 +2238,131 @@ function calculateClimateQuotation() {
   const cargaCalorW = subtotalCalor * factorAislacion * CLIMATE_ZONA_FACTOR.calor;
   const cargaCalorBTU = Math.round(cargaCalorW * 3.412);
 
-  const necesitaFrio = data.necesidad === 'frio' || data.necesidad === 'ambas';
-  const necesitaCalor = data.necesidad === 'calor' || data.necesidad === 'ambas';
+  const necesitaFrio = room.necesidad === 'frio' || room.necesidad === 'ambas';
+  const necesitaCalor = room.necesidad === 'calor' || room.necesidad === 'ambas';
 
-  // ── Selección del equipo más chico que cumpla (catálogo ya viene ordenado
-  // de menor a mayor capacidad) ──
-  const esPortatil = data.tipoEquipo === 'portatil';
+  // ── Selección de equipo(s) (catálogo ya viene ordenado de menor a mayor
+  // capacidad) ──
+  // Primero se intenta con 1 solo equipo. Si ninguno individual cubre la
+  // carga, se prueban combinaciones de 2, 3, etc. (mismo tipo de equipo,
+  // fijo o portátil, nunca se mezclan catálogos). Entre todas las
+  // combinaciones que sí cubren la carga con una misma cantidad de equipos,
+  // se elige la que deja menos capacidad sobrante (más ajustada a la carga
+  // real) — por eso conviene, por ejemplo, un 18.000 + un 9.000 antes que
+  // un 24.000 + un 9.000 para cubrir 26.000 BTU/h.
+  const esPortatil = room.tipoEquipo === 'portatil';
   const catalogo = esPortatil ? CLIMATE_CATALOGO_PORTATIL : CLIMATE_CATALOGO_FIJO;
+  const MAX_EQUIPOS = 4; // tope razonable de equipos a proponer juntos por habitación
 
-  let equipoElegido = null;
-  for (const eq of catalogo) {
-    const capFrioReal = Math.round(esPortatil ? eq.frioBTU * CLIMATE_PORTATIL_DERATE : eq.frioBTU);
-    const capCalorReal = Math.round(esPortatil ? eq.calorBTU * CLIMATE_PORTATIL_DERATE : eq.calorBTU);
-    const cumpleFrio = !necesitaFrio || capFrioReal >= cargaFrioBTU;
-    const cumpleCalor = !necesitaCalor || capCalorReal >= cargaCalorBTU;
-    if (cumpleFrio && cumpleCalor) {
-      equipoElegido = {
+  function evaluarCombo(indices) {
+    let sumFrio = 0, sumCalor = 0, totalCost = 0;
+    const equipos = indices.map(idx => {
+      const eq = catalogo[idx];
+      const capFrioReal = Math.round(esPortatil ? eq.frioBTU * CLIMATE_PORTATIL_DERATE : eq.frioBTU);
+      const capCalorReal = Math.round(esPortatil ? eq.calorBTU * CLIMATE_PORTATIL_DERATE : eq.calorBTU);
+      const unitTotalCost = eq.costoEquipo + eq.costoInstalacion;
+      sumFrio += capFrioReal;
+      sumCalor += capCalorReal;
+      totalCost += unitTotalCost;
+      return {
         modelo: eq.modelo, capFrioReal, capCalorReal,
         costoEquipo: eq.costoEquipo, costoInstalacion: eq.costoInstalacion,
-        totalCost: eq.costoEquipo + eq.costoInstalacion
+        totalCost: unitTotalCost
       };
-      break;
+    });
+    return { equipos, sumFrio, sumCalor, totalCost };
+  }
+
+  // Combinaciones con repetición de tamaño n, sin importar el orden
+  // (ej: [0,0,2] = dos equipos del modelo 0 + uno del modelo 2)
+  function combosConRepeticion(n, numModelos) {
+    const resultados = [];
+    function paso(desde, combo) {
+      if (combo.length === n) { resultados.push(combo.slice()); return; }
+      for (let i = desde; i < numModelos; i++) {
+        combo.push(i);
+        paso(i, combo);
+        combo.pop();
+      }
     }
+    paso(0, []);
+    return resultados;
+  }
+
+  let equiposElegidos = null;
+  let menorExcedente = Infinity;
+
+  for (let n = 1; n <= MAX_EQUIPOS && !equiposElegidos; n++) {
+    const combos = combosConRepeticion(n, catalogo.length);
+    for (const comboIdx of combos) {
+      const { equipos, sumFrio, sumCalor } = evaluarCombo(comboIdx);
+      const cumpleFrio = !necesitaFrio || sumFrio >= cargaFrioBTU;
+      const cumpleCalor = !necesitaCalor || sumCalor >= cargaCalorBTU;
+      if (!cumpleFrio || !cumpleCalor) continue;
+      const excedente = (necesitaFrio ? (sumFrio - cargaFrioBTU) : 0) + (necesitaCalor ? (sumCalor - cargaCalorBTU) : 0);
+      if (excedente < menorExcedente) {
+        menorExcedente = excedente;
+        equiposElegidos = equipos;
+      }
+    }
+    // Si ya encontramos alguna combinación válida con "n" equipos, esa es la
+    // cantidad mínima posible — no seguimos probando con más equipos.
   }
 
   let advertencia = null;
-  if (!equipoElegido) {
+  if (!equiposElegidos) {
+    // Ni siquiera MAX_EQUIPOS unidades del modelo más grande alcanzan a cubrir la carga.
     const masGrande = catalogo[catalogo.length - 1];
-    equipoElegido = {
-      modelo: masGrande.modelo,
-      capFrioReal: Math.round(esPortatil ? masGrande.frioBTU * CLIMATE_PORTATIL_DERATE : masGrande.frioBTU),
-      capCalorReal: Math.round(esPortatil ? masGrande.calorBTU * CLIMATE_PORTATIL_DERATE : masGrande.calorBTU),
+    const capFrioReal = Math.round(esPortatil ? masGrande.frioBTU * CLIMATE_PORTATIL_DERATE : masGrande.frioBTU);
+    const capCalorReal = Math.round(esPortatil ? masGrande.calorBTU * CLIMATE_PORTATIL_DERATE : masGrande.calorBTU);
+    equiposElegidos = Array.from({ length: MAX_EQUIPOS }, () => ({
+      modelo: masGrande.modelo, capFrioReal, capCalorReal,
       costoEquipo: masGrande.costoEquipo, costoInstalacion: masGrande.costoInstalacion,
       totalCost: masGrande.costoEquipo + masGrande.costoInstalacion
-    };
-    advertencia = 'Ningún equipo individual del catálogo cubre esta carga por completo — se recomienda evaluar más de un equipo, zonificación, o una visita técnica especializada.';
+    }));
+    advertencia = `Ni siquiera ${MAX_EQUIPOS} equipos ${masGrande.modelo} cubren esta carga por completo — se recomienda evaluar zonificación adicional o una visita técnica especializada.`;
+  } else if (equiposElegidos.length > 1) {
+    advertencia = 'Ningún equipo individual del catálogo cubre esta carga por completo, por lo que se propone instalar más de un equipo.';
   }
 
+  const capFrioTotal = necesitaFrio ? equiposElegidos.reduce((s, e) => s + e.capFrioReal, 0) : null;
+  const capCalorTotal = necesitaCalor ? equiposElegidos.reduce((s, e) => s + e.capCalorReal, 0) : null;
+  const totalCost = equiposElegidos.reduce((s, e) => s + e.totalCost, 0);
+
   return {
-    quoteNumber: sqGenerateQuoteNumber(),
-    necesidad: data.necesidad,
+    necesidad: room.necesidad,
     cargaFrioBTU: necesitaFrio ? cargaFrioBTU : null,
     cargaCalorBTU: necesitaCalor ? cargaCalorBTU : null,
-    tipoEquipo: data.tipoEquipo,
-    equipo: equipoElegido,
-    totalCost: equipoElegido.totalCost,
+    tipoEquipo: room.tipoEquipo,
+    equipos: equiposElegidos,
+    capFrioTotal,
+    capCalorTotal,
+    totalCost,
     advertencia
   };
+}
+
+// Cotiza todas las habitaciones cargadas y arma la cotización agregada.
+function calculateClimateQuotation() {
+  const rooms = climateQuoterState.data.rooms.map(room => climateComputeRoomQuote(room));
+  const totalCost = rooms.reduce((s, r) => s + r.totalCost, 0);
+  return {
+    quoteNumber: sqGenerateQuoteNumber(),
+    rooms,
+    totalCost
+  };
+}
+
+// Agrupa equipos repetidos para mostrarlos como "2x GES18ECOFLOW-N" en vez
+// de listar el mismo modelo varias veces.
+function climateAgruparEquiposLabel(equipos) {
+  const orden = [];
+  const conteos = {};
+  equipos.forEach(e => {
+    if (!(e.modelo in conteos)) { orden.push(e.modelo); conteos[e.modelo] = 0; }
+    conteos[e.modelo]++;
+  });
+  return orden.map(modelo => conteos[modelo] > 1 ? `${conteos[modelo]}x ${modelo}` : modelo);
 }
 
 function nextClimateStep() {
@@ -2285,7 +2411,8 @@ function renderClimateQuoterStep() {
       </div>`;
   }
 
-  // 1-Dirección → 2-Necesidad → 3-Emplazamiento → 4-Aislación → 5-Ventanas → 6-Uso → 7-Equipo → 8-Cotización → 9-Agendar
+  // 1-Dirección → 2-N° de habitaciones → 3-Necesidad → 4-Emplazamiento →
+  // 5-Aislación → 6-Ventanas → 7-Uso → 8-Equipo → 9-Cotización → 10-Agendar
   if (step === 1) {
     html += renderClimateStep1();
   } else if (step === 2) {
@@ -2300,9 +2427,11 @@ function renderClimateQuoterStep() {
     html += renderClimateStep6();
   } else if (step === 7) {
     html += renderClimateStep7();
-  } else if (step === 8 && !climateQuoterState.paymentSuccess) {
-    html += renderClimateQuoteStep();
+  } else if (step === 8) {
+    html += renderClimateStep8();
   } else if (step === 9 && !climateQuoterState.paymentSuccess) {
+    html += renderClimateQuoteStep();
+  } else if (step === 10 && !climateQuoterState.paymentSuccess) {
     html += renderClimateScheduleStep();
   } else if (climateQuoterState.paymentSuccess) {
     html += renderClimateSuccess();
@@ -2313,7 +2442,6 @@ function renderClimateQuoterStep() {
   container.innerHTML = html;
 }
 
-// Paso 1 — ¿Necesita frío, calor o ambas?
 // Paso 1 — Dirección (para que aparezca en el agendamiento de visitas y el descargable)
 function renderClimateStep1() {
   const data = climateQuoterState.data;
@@ -2345,105 +2473,164 @@ function clUpdateStep1Button() {
   btn.classList.toggle('disabled', !climateQuoterState.data.address);
 }
 
+// Paso 2 — ¿Cuántas habitaciones separadas necesitas climatizar?
 function renderClimateStep2() {
   const data = climateQuoterState.data;
+  const n = parseInt(data.numRooms);
+  const canContinue = n > 0;
+
+  return `
+    <div class="sq-step-content">
+      <div class="sq-step-icon purple">🏘️</div>
+      <h3 class="sq-step-title">¿Cuántas habitaciones separadas necesitas climatizar?</h3>
+      <p class="sq-step-desc">Cada una tendrá su propia recomendación de equipo</p>
+
+      <div class="sq-field">
+        <label>Cantidad de habitaciones</label>
+        <input type="number" id="cl-num-rooms" min="1" max="${CLIMATE_MAX_HABITACIONES}" step="1" placeholder="Ej: 2" value="${data.numRooms}" oninput="climateQuoterState.data.numRooms = this.value; clUpdateStep2Button();">
+      </div>
+
+      ${n > CLIMATE_MAX_HABITACIONES ? `
+        <div class="sq-info-box blue">
+          <span>💡</span>
+          <p>Por ahora puedes cotizar hasta ${CLIMATE_MAX_HABITACIONES} habitaciones en una misma visita. Si continúas, cotizaremos las primeras ${CLIMATE_MAX_HABITACIONES}.</p>
+        </div>
+      ` : ''}
+
+      <div class="sq-btn-row">
+        <button class="sq-btn-secondary" onclick="prevClimateStep()">‹ Volver</button>
+        <button class="sq-btn-primary ${!canContinue ? 'disabled' : ''}" id="cl-step2-btn" onclick="if(parseInt(climateQuoterState.data.numRooms)>0) { climateSyncRooms(); nextClimateStep(); }">Continuar</button>
+      </div>
+    </div>`;
+}
+
+function clUpdateStep2Button() {
+  const btn = document.getElementById('cl-step2-btn');
+  if (!btn) return;
+  const ok = parseInt(climateQuoterState.data.numRooms) > 0;
+  btn.classList.toggle('disabled', !ok);
+}
+
+// Paso 3 — ¿Qué necesita climatizar cada habitación?
+function renderClimateStep3() {
+  const rooms = climateQuoterState.data.rooms;
+  const canContinue = rooms.every(r => r.necesidad);
+
   return `
     <div class="sq-step-content">
       <div class="sq-step-icon purple">🌡️</div>
       <h3 class="sq-step-title">¿Qué necesitas climatizar?</h3>
-      <p class="sq-step-desc">Elige una opción</p>
+      <p class="sq-step-desc">Elige una opción para cada habitación</p>
 
-      <div class="sq-options-grid-3">
-        <button class="sq-option-card ${data.necesidad === 'frio' ? 'selected' : ''}" onclick="climateQuoterState.data.necesidad = 'frio'; renderClimateQuoterStep();">
-          <span class="sq-option-icon">❄️</span>
-          <p class="sq-option-label">Frío</p>
-        </button>
-        <button class="sq-option-card ${data.necesidad === 'calor' ? 'selected' : ''}" onclick="climateQuoterState.data.necesidad = 'calor'; renderClimateQuoterStep();">
-          <span class="sq-option-icon">🔥</span>
-          <p class="sq-option-label">Calor</p>
-        </button>
-        <button class="sq-option-card ${data.necesidad === 'ambas' ? 'selected' : ''}" onclick="climateQuoterState.data.necesidad = 'ambas'; renderClimateQuoterStep();">
-          <span class="sq-option-icon">❄️🔥</span>
-          <p class="sq-option-label">Ambas</p>
-        </button>
+      ${rooms.map((r, i) => `
+        <div class="sq-room-block">
+          <p class="sq-room-block-title">Habitación ${i + 1}</p>
+          <div class="sq-options-grid-3">
+            <button class="sq-option-card ${r.necesidad === 'frio' ? 'selected' : ''}" onclick="climateQuoterState.data.rooms[${i}].necesidad = 'frio'; renderClimateQuoterStep();">
+              <span class="sq-option-icon">❄️</span>
+              <p class="sq-option-label">Frío</p>
+            </button>
+            <button class="sq-option-card ${r.necesidad === 'calor' ? 'selected' : ''}" onclick="climateQuoterState.data.rooms[${i}].necesidad = 'calor'; renderClimateQuoterStep();">
+              <span class="sq-option-icon">🔥</span>
+              <p class="sq-option-label">Calor</p>
+            </button>
+            <button class="sq-option-card ${r.necesidad === 'ambas' ? 'selected' : ''}" onclick="climateQuoterState.data.rooms[${i}].necesidad = 'ambas'; renderClimateQuoterStep();">
+              <span class="sq-option-icon">❄️🔥</span>
+              <p class="sq-option-label">Ambas</p>
+            </button>
+          </div>
+        </div>
+      `).join('')}
+
+      <div class="sq-btn-row">
+        <button class="sq-btn-secondary" onclick="prevClimateStep()">‹ Volver</button>
+        <button class="sq-btn-primary ${!canContinue ? 'disabled' : ''}" onclick="if(climateQuoterState.data.rooms.every(r=>r.necesidad)) nextClimateStep()">Continuar</button>
       </div>
-
-      <button class="sq-btn-primary ${!data.necesidad ? 'disabled' : ''}" onclick="if(climateQuoterState.data.necesidad) nextClimateStep()">Continuar</button>
     </div>`;
 }
 
-// Paso 2 — m² del emplazamiento + altura del techo
-function renderClimateStep3() {
-  const data = climateQuoterState.data;
-  const canContinue = parseFloat(data.areaM2) > 0 && parseFloat(data.alturaTecho) > 0;
+// Paso 4 — m² del emplazamiento + altura del techo, por habitación
+function renderClimateStep4() {
+  const rooms = climateQuoterState.data.rooms;
+  const canContinue = rooms.every(r => parseFloat(r.areaM2) > 0 && parseFloat(r.alturaTecho) > 0);
 
   return `
     <div class="sq-step-content">
       <div class="sq-step-icon blue">📐</div>
       <h3 class="sq-step-title">Datos del emplazamiento</h3>
-      <p class="sq-step-desc">Superficie y altura del espacio a climatizar</p>
+      <p class="sq-step-desc">Superficie y altura de cada habitación</p>
 
-      <div class="sq-field">
-        <label>m² del emplazamiento</label>
-        <input type="number" id="cl-area" min="0" step="1" placeholder="Ej: 60" value="${data.areaM2}" oninput="climateQuoterState.data.areaM2 = this.value; clUpdateStep3Button();">
-      </div>
-
-      <div class="sq-field">
-        <label>Altura del techo (metros)</label>
-        <input type="number" id="cl-altura" min="0" step="0.1" placeholder="Ej: 2.4" value="${data.alturaTecho}" oninput="climateQuoterState.data.alturaTecho = this.value; clUpdateStep3Button();">
-      </div>
+      ${rooms.map((r, i) => `
+        <div class="sq-room-block">
+          <p class="sq-room-block-title">Habitación ${i + 1}</p>
+          <div class="sq-field">
+            <label>m² del emplazamiento</label>
+            <input type="number" id="cl-area-${i}" min="0" step="1" placeholder="Ej: 60" value="${r.areaM2}" oninput="climateQuoterState.data.rooms[${i}].areaM2 = this.value; clUpdateStep4Button();">
+          </div>
+          <div class="sq-field">
+            <label>Altura del techo (metros)</label>
+            <input type="number" id="cl-altura-${i}" min="0" step="0.1" placeholder="Ej: 2.4" value="${r.alturaTecho}" oninput="climateQuoterState.data.rooms[${i}].alturaTecho = this.value; clUpdateStep4Button();">
+          </div>
+        </div>
+      `).join('')}
 
       <div class="sq-btn-row">
         <button class="sq-btn-secondary" onclick="prevClimateStep()">‹ Volver</button>
-        <button class="sq-btn-primary ${!canContinue ? 'disabled' : ''}" id="cl-step3-btn" onclick="if(parseFloat(climateQuoterState.data.areaM2)>0 && parseFloat(climateQuoterState.data.alturaTecho)>0) nextClimateStep()">Continuar</button>
+        <button class="sq-btn-primary ${!canContinue ? 'disabled' : ''}" id="cl-step4-btn" onclick="if(climateQuoterState.data.rooms.every(r => parseFloat(r.areaM2)>0 && parseFloat(r.alturaTecho)>0)) nextClimateStep()">Continuar</button>
       </div>
     </div>`;
 }
 
-function clUpdateStep3Button() {
-  const btn = document.getElementById('cl-step3-btn');
+function clUpdateStep4Button() {
+  const btn = document.getElementById('cl-step4-btn');
   if (!btn) return;
-  const data = climateQuoterState.data;
-  const ok = parseFloat(data.areaM2) > 0 && parseFloat(data.alturaTecho) > 0;
+  const ok = climateQuoterState.data.rooms.every(r => parseFloat(r.areaM2) > 0 && parseFloat(r.alturaTecho) > 0);
   btn.classList.toggle('disabled', !ok);
 }
 
-// Paso 3 — Tipo de aislación existente
-function renderClimateStep4() {
-  const data = climateQuoterState.data;
+// Paso 5 — Tipo de aislación existente, por habitación
+function renderClimateStep5() {
+  const rooms = climateQuoterState.data.rooms;
+  const canContinue = rooms.every(r => r.aislacion);
+
   return `
     <div class="sq-step-content">
       <div class="sq-step-icon amber">🧱</div>
       <h3 class="sq-step-title">Tipo de aislación existente</h3>
-      <p class="sq-step-desc">Elige la que más se parece a tu espacio</p>
+      <p class="sq-step-desc">Elige la que más se parece a cada habitación</p>
 
-      <div class="sq-options-grid-3">
-        <button class="sq-option-card ${data.aislacion === 'liviana' ? 'selected' : ''}" onclick="climateQuoterState.data.aislacion = 'liviana'; renderClimateQuoterStep();">
-          <span class="sq-option-icon">🪶</span>
-          <p class="sq-option-label">Liviana</p>
-        </button>
-        <button class="sq-option-card ${data.aislacion === 'estandar' ? 'selected' : ''}" onclick="climateQuoterState.data.aislacion = 'estandar'; renderClimateQuoterStep();">
-          <span class="sq-option-icon">🧱</span>
-          <p class="sq-option-label">Estándar</p>
-        </button>
-        <button class="sq-option-card ${data.aislacion === 'alta' ? 'selected' : ''}" onclick="climateQuoterState.data.aislacion = 'alta'; renderClimateQuoterStep();">
-          <span class="sq-option-icon">🛡️</span>
-          <p class="sq-option-label">Alta aislación</p>
-        </button>
-      </div>
+      ${rooms.map((r, i) => `
+        <div class="sq-room-block">
+          <p class="sq-room-block-title">Habitación ${i + 1}</p>
+          <div class="sq-options-grid-3">
+            <button class="sq-option-card ${r.aislacion === 'liviana' ? 'selected' : ''}" onclick="climateQuoterState.data.rooms[${i}].aislacion = 'liviana'; renderClimateQuoterStep();">
+              <span class="sq-option-icon">🪶</span>
+              <p class="sq-option-label">Liviana</p>
+            </button>
+            <button class="sq-option-card ${r.aislacion === 'estandar' ? 'selected' : ''}" onclick="climateQuoterState.data.rooms[${i}].aislacion = 'estandar'; renderClimateQuoterStep();">
+              <span class="sq-option-icon">🧱</span>
+              <p class="sq-option-label">Estándar</p>
+            </button>
+            <button class="sq-option-card ${r.aislacion === 'alta' ? 'selected' : ''}" onclick="climateQuoterState.data.rooms[${i}].aislacion = 'alta'; renderClimateQuoterStep();">
+              <span class="sq-option-icon">🛡️</span>
+              <p class="sq-option-label">Alta aislación</p>
+            </button>
+          </div>
+        </div>
+      `).join('')}
 
       <div class="sq-btn-row">
         <button class="sq-btn-secondary" onclick="prevClimateStep()">‹ Volver</button>
-        <button class="sq-btn-primary ${!data.aislacion ? 'disabled' : ''}" onclick="if(climateQuoterState.data.aislacion) nextClimateStep()">Continuar</button>
+        <button class="sq-btn-primary ${!canContinue ? 'disabled' : ''}" onclick="if(climateQuoterState.data.rooms.every(r=>r.aislacion)) nextClimateStep()">Continuar</button>
       </div>
     </div>`;
 }
 
-// Paso 4 — m² de ventanas por orientación (Norte, Sur, Este, Oeste)
-function renderClimateStep5() {
-  const data = climateQuoterState.data;
+// Paso 6 — m² de ventanas por orientación (Norte, Sur, Este, Oeste), por habitación
+function renderClimateStep6() {
+  const rooms = climateQuoterState.data.rooms;
   const keys = ['ventanaNorte', 'ventanaSur', 'ventanaEste', 'ventanaOeste'];
-  const canContinue = keys.every(k => data[k] !== '' && parseFloat(data[k]) >= 0);
+  const canContinue = rooms.every(r => keys.every(k => r[k] !== '' && parseFloat(r[k]) >= 0));
 
   return `
     <div class="sq-step-content">
@@ -2451,110 +2638,125 @@ function renderClimateStep5() {
       <h3 class="sq-step-title">m² de ventanas por orientación</h3>
       <p class="sq-step-desc">Ingresa 0 si no hay ventanas en ese lado</p>
 
-      <div class="sq-field-grid-2">
-        <div class="sq-field">
-          <label>Norte</label>
-          <input type="number" id="cl-vent-norte" min="0" step="0.1" placeholder="Ej: 4" value="${data.ventanaNorte}" oninput="climateQuoterState.data.ventanaNorte = this.value; clUpdateStep5Button();">
+      ${rooms.map((r, i) => `
+        <div class="sq-room-block">
+          <p class="sq-room-block-title">Habitación ${i + 1}</p>
+          <div class="sq-field-grid-2">
+            <div class="sq-field">
+              <label>Norte</label>
+              <input type="number" id="cl-vent-norte-${i}" min="0" step="0.1" placeholder="Ej: 4" value="${r.ventanaNorte}" oninput="climateQuoterState.data.rooms[${i}].ventanaNorte = this.value; clUpdateStep6Button();">
+            </div>
+            <div class="sq-field">
+              <label>Sur</label>
+              <input type="number" id="cl-vent-sur-${i}" min="0" step="0.1" placeholder="Ej: 2" value="${r.ventanaSur}" oninput="climateQuoterState.data.rooms[${i}].ventanaSur = this.value; clUpdateStep6Button();">
+            </div>
+            <div class="sq-field">
+              <label>Este</label>
+              <input type="number" id="cl-vent-este-${i}" min="0" step="0.1" placeholder="Ej: 3" value="${r.ventanaEste}" oninput="climateQuoterState.data.rooms[${i}].ventanaEste = this.value; clUpdateStep6Button();">
+            </div>
+            <div class="sq-field">
+              <label>Oeste</label>
+              <input type="number" id="cl-vent-oeste-${i}" min="0" step="0.1" placeholder="Ej: 3" value="${r.ventanaOeste}" oninput="climateQuoterState.data.rooms[${i}].ventanaOeste = this.value; clUpdateStep6Button();">
+            </div>
+          </div>
         </div>
-        <div class="sq-field">
-          <label>Sur</label>
-          <input type="number" id="cl-vent-sur" min="0" step="0.1" placeholder="Ej: 2" value="${data.ventanaSur}" oninput="climateQuoterState.data.ventanaSur = this.value; clUpdateStep5Button();">
-        </div>
-        <div class="sq-field">
-          <label>Este</label>
-          <input type="number" id="cl-vent-este" min="0" step="0.1" placeholder="Ej: 3" value="${data.ventanaEste}" oninput="climateQuoterState.data.ventanaEste = this.value; clUpdateStep5Button();">
-        </div>
-        <div class="sq-field">
-          <label>Oeste</label>
-          <input type="number" id="cl-vent-oeste" min="0" step="0.1" placeholder="Ej: 3" value="${data.ventanaOeste}" oninput="climateQuoterState.data.ventanaOeste = this.value; clUpdateStep5Button();">
-        </div>
-      </div>
+      `).join('')}
 
       <div class="sq-btn-row">
         <button class="sq-btn-secondary" onclick="prevClimateStep()">‹ Volver</button>
-        <button class="sq-btn-primary ${!canContinue ? 'disabled' : ''}" id="cl-step5-btn" onclick="if(['ventanaNorte','ventanaSur','ventanaEste','ventanaOeste'].every(k => climateQuoterState.data[k] !== '' && parseFloat(climateQuoterState.data[k])>=0)) nextClimateStep()">Continuar</button>
+        <button class="sq-btn-primary ${!canContinue ? 'disabled' : ''}" id="cl-step6-btn" onclick="if(climateQuoterState.data.rooms.every(r => ['ventanaNorte','ventanaSur','ventanaEste','ventanaOeste'].every(k => r[k] !== '' && parseFloat(r[k])>=0))) nextClimateStep()">Continuar</button>
       </div>
     </div>`;
 }
 
-function clUpdateStep5Button() {
-  const btn = document.getElementById('cl-step5-btn');
+function clUpdateStep6Button() {
+  const btn = document.getElementById('cl-step6-btn');
   if (!btn) return;
-  const data = climateQuoterState.data;
   const keys = ['ventanaNorte', 'ventanaSur', 'ventanaEste', 'ventanaOeste'];
-  const ok = keys.every(k => data[k] !== '' && parseFloat(data[k]) >= 0);
+  const ok = climateQuoterState.data.rooms.every(r => keys.every(k => r[k] !== '' && parseFloat(r[k]) >= 0));
   btn.classList.toggle('disabled', !ok);
 }
 
-// Paso 5 — Uso: residencial, comercial, industrial
-function renderClimateStep6() {
-  const data = climateQuoterState.data;
+// Paso 7 — Uso: residencial, comercial, industrial, por habitación
+function renderClimateStep7() {
+  const rooms = climateQuoterState.data.rooms;
+  const canContinue = rooms.every(r => r.uso);
+
   return `
     <div class="sq-step-content">
       <div class="sq-step-icon green">🏢</div>
       <h3 class="sq-step-title">¿Cuál es el uso del espacio?</h3>
-      <p class="sq-step-desc">Elige una opción</p>
+      <p class="sq-step-desc">Elige una opción para cada habitación</p>
 
-      <div class="sq-options-grid-3">
-        <button class="sq-option-card ${data.uso === 'residencial' ? 'selected' : ''}" onclick="climateQuoterState.data.uso = 'residencial'; renderClimateQuoterStep();">
-          <span class="sq-option-icon">🏠</span>
-          <p class="sq-option-label">Residencial</p>
-        </button>
-        <button class="sq-option-card ${data.uso === 'comercial' ? 'selected' : ''}" onclick="climateQuoterState.data.uso = 'comercial'; renderClimateQuoterStep();">
-          <span class="sq-option-icon">🏬</span>
-          <p class="sq-option-label">Comercial</p>
-        </button>
-        <button class="sq-option-card ${data.uso === 'industrial' ? 'selected' : ''}" onclick="climateQuoterState.data.uso = 'industrial'; renderClimateQuoterStep();">
-          <span class="sq-option-icon">🏭</span>
-          <p class="sq-option-label">Industrial</p>
-        </button>
-      </div>
+      ${rooms.map((r, i) => `
+        <div class="sq-room-block">
+          <p class="sq-room-block-title">Habitación ${i + 1}</p>
+          <div class="sq-options-grid-3">
+            <button class="sq-option-card ${r.uso === 'residencial' ? 'selected' : ''}" onclick="climateQuoterState.data.rooms[${i}].uso = 'residencial'; renderClimateQuoterStep();">
+              <span class="sq-option-icon">🏠</span>
+              <p class="sq-option-label">Residencial</p>
+            </button>
+            <button class="sq-option-card ${r.uso === 'comercial' ? 'selected' : ''}" onclick="climateQuoterState.data.rooms[${i}].uso = 'comercial'; renderClimateQuoterStep();">
+              <span class="sq-option-icon">🏬</span>
+              <p class="sq-option-label">Comercial</p>
+            </button>
+            <button class="sq-option-card ${r.uso === 'industrial' ? 'selected' : ''}" onclick="climateQuoterState.data.rooms[${i}].uso = 'industrial'; renderClimateQuoterStep();">
+              <span class="sq-option-icon">🏭</span>
+              <p class="sq-option-label">Industrial</p>
+            </button>
+          </div>
+        </div>
+      `).join('')}
 
       <div class="sq-btn-row">
         <button class="sq-btn-secondary" onclick="prevClimateStep()">‹ Volver</button>
-        <button class="sq-btn-primary ${!data.uso ? 'disabled' : ''}" onclick="if(climateQuoterState.data.uso) nextClimateStep()">Continuar</button>
+        <button class="sq-btn-primary ${!canContinue ? 'disabled' : ''}" onclick="if(climateQuoterState.data.rooms.every(r=>r.uso)) nextClimateStep()">Continuar</button>
       </div>
     </div>`;
 }
 
-// Paso 6 — Tipo de equipo: fijo o portátil
-function renderClimateStep7() {
-  const data = climateQuoterState.data;
+// Paso 8 — Tipo de equipo: fijo o portátil, por habitación
+function renderClimateStep8() {
+  const rooms = climateQuoterState.data.rooms;
+  const canContinue = rooms.every(r => r.tipoEquipo);
+
   return `
     <div class="sq-step-content">
       <div class="sq-step-icon purple">❄️</div>
       <h3 class="sq-step-title">¿Qué tipo de equipo prefieres?</h3>
-      <p class="sq-step-desc">Elige una opción</p>
+      <p class="sq-step-desc">Elige una opción para cada habitación</p>
 
-      <div class="sq-options-grid" style="margin-bottom:22px;">
-        <button class="sq-option-card ${data.tipoEquipo === 'fijo' ? 'selected' : ''}" onclick="climateQuoterState.data.tipoEquipo = 'fijo'; renderClimateQuoterStep();">
-          <span class="sq-option-icon">🧊</span>
-          <p class="sq-option-label">Fijo</p>
-          <p class="sq-option-sublabel">Instalación permanente en muro</p>
-        </button>
-        <button class="sq-option-card ${data.tipoEquipo === 'portatil' ? 'selected' : ''}" onclick="climateQuoterState.data.tipoEquipo = 'portatil'; renderClimateQuoterStep();">
-          <span class="sq-option-icon">🧳</span>
-          <p class="sq-option-label">Portátil</p>
-          <p class="sq-option-sublabel">Se traslada entre ambientes</p>
-        </button>
-      </div>
+      ${rooms.map((r, i) => `
+        <div class="sq-room-block">
+          <p class="sq-room-block-title">Habitación ${i + 1}</p>
+          <div class="sq-options-grid" style="margin-bottom:0;">
+            <button class="sq-option-card ${r.tipoEquipo === 'fijo' ? 'selected' : ''}" onclick="climateQuoterState.data.rooms[${i}].tipoEquipo = 'fijo'; renderClimateQuoterStep();">
+              <span class="sq-option-icon">🧊</span>
+              <p class="sq-option-label">Fijo</p>
+              <p class="sq-option-sublabel">Instalación permanente en muro</p>
+            </button>
+            <button class="sq-option-card ${r.tipoEquipo === 'portatil' ? 'selected' : ''}" onclick="climateQuoterState.data.rooms[${i}].tipoEquipo = 'portatil'; renderClimateQuoterStep();">
+              <span class="sq-option-icon">🧳</span>
+              <p class="sq-option-label">Portátil</p>
+              <p class="sq-option-sublabel">Se traslada entre ambientes</p>
+            </button>
+          </div>
+        </div>
+      `).join('')}
 
       <div class="sq-btn-row">
         <button class="sq-btn-secondary" onclick="prevClimateStep()">‹ Volver</button>
-        <button class="sq-btn-primary ${!data.tipoEquipo ? 'disabled' : ''}" onclick="if(climateQuoterState.data.tipoEquipo) nextClimateStep()">Ver resumen</button>
+        <button class="sq-btn-primary ${!canContinue ? 'disabled' : ''}" onclick="if(climateQuoterState.data.rooms.every(r=>r.tipoEquipo)) nextClimateStep()">Ver resumen</button>
       </div>
     </div>`;
 }
 
-// Paso 8 — Cotización: equipo recomendado + inversión + descargar/agendar
+// Paso 9 — Cotización: un equipo (o combinación) recomendado por habitación + inversión total + descargar/agendar
 function renderClimateQuoteStep() {
   const data = climateQuoterState.data;
   const q = climateQuoterState.quotation;
 
-  const necesidadLabel = { frio: 'Frío', calor: 'Calor', ambas: 'Frío y calor' }[data.necesidad] || '—';
-  const equipoTipoLabel = { fijo: 'Split Muro', portatil: 'Portátil' }[data.tipoEquipo] || '—';
-
-  if (!q || !q.equipo) {
+  if (!q || !q.rooms || !q.rooms.length) {
     return `
       <div class="sq-step-content">
         <div class="sq-info-box blue" style="text-align:left;">
@@ -2565,45 +2767,55 @@ function renderClimateQuoteStep() {
       </div>`;
   }
 
-  return `
-    <div class="sq-step-content">
-      <div class="sq-quote-card" style="background:linear-gradient(135deg, #7253C8, #4E3899);">
+  const equipoTipoLabel = { fijo: 'Split Muro', portatil: 'Portátil' };
+
+  const roomCardsHtml = q.rooms.map((r, i) => `
+      <div class="sq-quote-card" style="background:linear-gradient(135deg, #7253C8, #4E3899); margin-bottom:14px;">
         <div class="sq-quote-header">
-          <h3>Equipo recomendado</h3>
+          <h3>Habitación ${i + 1}</h3>
           <span class="sq-quote-badge">Precotización</span>
         </div>
 
         <div class="sq-quote-stats">
-          <div><p class="sq-stat-label">Tipo</p><p class="sq-stat-value">${equipoTipoLabel}</p></div>
-          <div><p class="sq-stat-label">Modelo</p><p class="sq-stat-value">${q.equipo.modelo}</p></div>
+          <div><p class="sq-stat-label">Tipo</p><p class="sq-stat-value">${equipoTipoLabel[r.tipoEquipo] || '—'}</p></div>
+          <div><p class="sq-stat-label">Equipos</p><p class="sq-stat-value">${climateAgruparEquiposLabel(r.equipos).join(' + ')}</p></div>
         </div>
 
         <div class="sq-battery-info">
-          ${q.cargaFrioBTU ? `<div class="sq-battery-info-header">❄️ Carga de frío: ${q.cargaFrioBTU.toLocaleString('es-CL')} BTU/h</div>` : ''}
-          ${q.cargaCalorBTU ? `<div class="sq-battery-info-header">🔥 Carga de calor: ${q.cargaCalorBTU.toLocaleString('es-CL')} BTU/h</div>` : ''}
+          ${r.cargaFrioBTU ? `<div class="sq-battery-info-header">❄️ Carga de frío: ${r.cargaFrioBTU.toLocaleString('es-CL')} BTU/h</div>` : ''}
+          ${r.cargaCalorBTU ? `<div class="sq-battery-info-header">🔥 Carga de calor: ${r.cargaCalorBTU.toLocaleString('es-CL')} BTU/h</div>` : ''}
           <div class="sq-battery-info-stats">
-            ${q.cargaFrioBTU ? `<div><p class="sq-stat-label">Capacidad frío del equipo</p><p class="sq-stat-value">${q.equipo.capFrioReal.toLocaleString('es-CL')} BTU/h</p></div>` : ''}
-            ${q.cargaCalorBTU ? `<div><p class="sq-stat-label">Capacidad calor del equipo</p><p class="sq-stat-value">${q.equipo.capCalorReal.toLocaleString('es-CL')} BTU/h</p></div>` : ''}
+            ${r.cargaFrioBTU ? `<div><p class="sq-stat-label">Capacidad frío total</p><p class="sq-stat-value">${r.capFrioTotal.toLocaleString('es-CL')} BTU/h</p></div>` : ''}
+            ${r.cargaCalorBTU ? `<div><p class="sq-stat-label">Capacidad calor total</p><p class="sq-stat-value">${r.capCalorTotal.toLocaleString('es-CL')} BTU/h</p></div>` : ''}
           </div>
         </div>
 
         <div class="sq-quote-total">
-          <span>Inversión total</span>
-          <span class="sq-quote-price">$${(q.totalCost/1000000).toFixed(1)}M</span>
+          <span>Inversión habitación ${i + 1}</span>
+          <span class="sq-quote-price">$${(r.totalCost/1000000).toFixed(1)}M</span>
         </div>
       </div>
-
-      ${q.advertencia ? `
+      ${r.advertencia ? `
         <div class="sq-info-box blue" style="text-align:left;">
           <span>⚠️</span>
-          <p>${q.advertencia}</p>
+          <p><strong>Habitación ${i + 1}:</strong> ${r.advertencia}</p>
         </div>
       ` : ''}
+  `).join('');
+
+  return `
+    <div class="sq-step-content">
+      ${roomCardsHtml}
 
       <div class="sq-address-box">
         <span>📍</span>
         <div><p class="sq-address-label">Dirección de instalación</p><p class="sq-address-value">${data.address}</p></div>
         <button class="sq-edit-btn" onclick="climateQuoterState.step = 1; renderClimateQuoterStep();">Editar</button>
+      </div>
+
+      <div style="border:2px solid #FE5100; border-radius:12px; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <span style="font-size:13px; font-weight:800; color:#0D1B2A;">INVERSIÓN TOTAL</span>
+        <span style="font-size:18px; font-weight:800; color:#FE5100;">$${(q.totalCost/1000000).toFixed(1)}M</span>
       </div>
 
       <div class="sq-share-row">
@@ -2628,7 +2840,7 @@ function renderClimateQuoteStep() {
     </div>`;
 }
 
-// Paso 9 — Agendar visita técnica (nombre, teléfono, calendario, horario, pago)
+// Paso 10 — Agendar visita técnica (nombre, teléfono, calendario, horario, pago)
 function renderClimateScheduleStep() {
   const data = climateQuoterState.data;
   const times = ['09:00 - 12:00', '12:00 - 15:00', '15:00 - 18:00', '18:00 - 20:00'];
@@ -2763,6 +2975,9 @@ function processClimatePayment() {
 function climateSaveBooking() {
   const data = climateQuoterState.data;
   const q = climateQuoterState.quotation;
+  const detail = (q && q.rooms && q.rooms.length)
+    ? q.rooms.map((r, i) => `Hab. ${i + 1}: ${climateAgruparEquiposLabel(r.equipos).join(' + ')} (${{fijo:'Split Muro',portatil:'Portátil'}[r.tipoEquipo] || ''})`).join(' · ')
+    : '—';
   const booking = {
     id: 'b_' + Date.now(),
     product: 'Climatización',
@@ -2772,7 +2987,7 @@ function climateSaveBooking() {
     visitDate: data.visitDate,
     visitTime: data.visitTime,
     totalCost: q ? q.totalCost : null,
-    detail: q ? `${q.equipo.modelo} (${{fijo:'Split Muro',portatil:'Portátil'}[data.tipoEquipo] || ''})` : '—',
+    detail,
     createdAt: new Date().toISOString()
   };
 
@@ -3121,7 +3336,7 @@ function buildEVPdfSections(q, data) {
     { icon: '🛡️', label: 'Garantía de instalación' },
     { icon: '🔧', label: 'Servicio post-venta' },
     { icon: '📞', label: 'Soporte técnico' },
-    { icon: '✅', label: 'Cumple normativa SEC' }
+    { icon: '✅', label: 'Equipos de primer nivel' }
   ];
 
   const sections = [];
@@ -3157,11 +3372,12 @@ function buildEVPdfSections(q, data) {
   // Tu solución de carga — mismo estilo de íconos circulares que "Cómo se genera tu energía" en Solar
   sections.push(`
     <div style="background:#0D1B2A; padding:12px 24px;">
-      <p style="color:#fff; font-size:9px; font-weight:800; letter-spacing:.6px; margin:0 0 10px; text-align:center;">TU SOLUCIÓN DE CARGA</p>
+      <p style="color:#fff; font-size:9px; font-weight:800; letter-spacing:.6px; margin:0 0 4px; text-align:center;">TU SOLUCIÓN DE CARGA</p>
+      <p style="color:#9fb3c8; font-size:8px; margin:0 0 10px; text-align:center;">Cargador 7kW + instalación + cableado${q.esTerceros ? ' + plataforma de pago' : ''}</p>
       <div style="display:flex; justify-content:center; gap:10px; flex-wrap:wrap;">
         <div style="text-align:center; width:54px;">
           <div style="width:32px; height:32px; border-radius:50%; border:1.5px solid #22c55e; display:flex; align-items:center; justify-content:center; margin:0 auto 4px; font-size:12px;">🔌</div>
-          <p style="color:#fff; font-size:7px; font-weight:700; margin:0 0 1px;">Cargadores</p>
+          <p style="color:#fff; font-size:7px; font-weight:700; margin:0 0 1px;">Cargador 7kW</p>
           <p style="color:#9fb3c8; font-size:6.5px; margin:0;">${q.numChargers} u</p>
         </div>
         <div style="text-align:center; width:54px;">
@@ -3169,6 +3385,13 @@ function buildEVPdfSections(q, data) {
           <p style="color:#fff; font-size:7px; font-weight:700; margin:0 0 1px;">Cableado</p>
           <p style="color:#9fb3c8; font-size:6.5px; margin:0;">${q.cableDistanceM} m</p>
         </div>
+        ${q.esTerceros ? `
+        <div style="text-align:center; width:54px;">
+          <div style="width:32px; height:32px; border-radius:50%; border:1.5px solid #FE5100; display:flex; align-items:center; justify-content:center; margin:0 auto 4px; font-size:12px;">💳</div>
+          <p style="color:#fff; font-size:7px; font-weight:700; margin:0 0 1px;">Sist. de cobro</p>
+          <p style="color:#9fb3c8; font-size:6.5px; margin:0;">Incluido*</p>
+        </div>
+        ` : ''}
         <div style="text-align:center; width:54px;">
           <div style="width:32px; height:32px; border-radius:50%; border:1.5px solid #22c55e; display:flex; align-items:center; justify-content:center; margin:0 auto 4px; font-size:12px;">🚗</div>
           <p style="color:#fff; font-size:7px; font-weight:700; margin:0 0 1px;">Tu flota</p>
@@ -3178,20 +3401,41 @@ function buildEVPdfSections(q, data) {
     </div>
   `);
 
-  // Inversión total (sin opción de leasing para este producto)
+  // Cómo pagar tu proyecto — Leasing / Al contado / Cobro por energía, 3 columnas iguales (borrador, sin valores definidos aún)
   sections.push(`
     <div style="padding:12px 24px 4px;">
-      <div style="border:2px solid #FE5100; border-radius:10px; padding:12px 14px; display:flex; justify-content:space-between; align-items:center;">
-        <span style="font-size:11px; font-weight:800; color:#0D1B2A;">INVERSIÓN TOTAL</span>
-        <span style="font-size:18px; font-weight:800; color:#FE5100;">${fmtCLP0(q.totalCost)}</span>
+      <p style="font-size:10px; font-weight:800; color:#0D1B2A; margin:0 0 8px;">CÓMO PAGAR TU PROYECTO</p>
+      <div style="display:flex; gap:6px;">
+        <div style="flex:1; border:1.5px solid #FE5100; border-radius:10px; padding:8px;">
+          <span style="background:#FE5100; color:#fff; font-size:5.5px; font-weight:800; padding:2px 5px; border-radius:5px; letter-spacing:.2px;">RECOMENDADO</span>
+          <p style="font-size:7px; color:#6b7280; font-weight:700; margin:7px 0 2px; letter-spacing:.2px;">LEASING · 48 CUOTAS</p>
+          <p style="font-size:13px; font-weight:800; color:#0D1B2A; margin:0 0 4px;">$0 <span style="font-size:7.5px; font-weight:600; color:#6b7280;">de pie</span></p>
+          <p style="font-size:6.5px; color:#9ca3af; margin:0; line-height:1.4;">Cuota mensual a confirmar con tasa, sujeta a evaluación.</p>
+        </div>
+        <div style="flex:1; border:1px solid #e5e7eb; border-radius:10px; padding:8px; background:#f9fafb;">
+          <p style="font-size:7px; color:#6b7280; font-weight:700; margin:0 0 7px; letter-spacing:.2px;">AL CONTADO</p>
+          <p style="font-size:13px; font-weight:800; color:#0D1B2A; margin:0 0 4px;">${fmtCLP0(q.totalCost)}</p>
+          <p style="font-size:6.5px; color:#9ca3af; margin:0; line-height:1.4;">Incluye equipos, instalación, cableado y certificación SEC.</p>
+        </div>
+        <div style="flex:1; border:1.5px solid #22c55e; border-radius:10px; padding:8px;">
+          <span style="background:#22c55e; color:#fff; font-size:5.5px; font-weight:800; padding:2px 5px; border-radius:5px; letter-spacing:.2px;">SIN INVERSIÓN INICIAL</span>
+          <p style="font-size:7px; color:#6b7280; font-weight:700; margin:7px 0 2px; letter-spacing:.2px;">COBRO POR ENERGÍA**</p>
+          <p style="font-size:13px; font-weight:800; color:#0D1B2A; margin:0 0 4px;">$0 <span style="font-size:7.5px; font-weight:600; color:#6b7280;">de inversión</span></p>
+          <p style="font-size:6.5px; color:#9ca3af; margin:0; line-height:1.4;">Financiamos e instalamos el cargador. Cobramos directo a quienes lo usan, por tarifa de energía.</p>
+        </div>
       </div>
-      <p style="font-size:7.5px; color:#9ca3af; margin:6px 2px 0; line-height:1.4;">Incluye equipos, instalación y certificación SEC.</p>
     </div>
   `);
 
+  const evExtraNotes = [];
+  if (q.esTerceros) {
+    evExtraNotes.push('*El sistema de cobro a terceros significa un costo adicional en el proyecto.');
+  }
+  evExtraNotes.push('**La opción de cobro por energía depende de las condiciones y ubicación del proyecto, por lo que queda sujeta a estudio posterior a la visita técnica.');
+
   sections.push(buildTimelineSectionHtml(incluye, beneficios));
   sections.push(buildContactBlockHtml());
-  sections.push(buildDisclaimerBlockHtml(null, null));
+  sections.push(buildDisclaimerBlockHtml(null, null, null, evExtraNotes));
 
   return sections;
 }
@@ -3250,8 +3494,8 @@ function buildIncluyeSectionHtml(incluye) {
 // Nota: ya no incluye el ícono de advertencia (naranjo) que se usaba antes junto al título
 function buildContactBlockHtml(monthlySavings) {
   const reassurance = monthlySavings
-    ? `Sin costo ni compromiso — confirmamos precio final y cuota tras la visita.`
-    : `Sin costo ni compromiso — confirmamos precio final tras la visita.`;
+    ? `Confirmamos precio final y cuota tras la visita.`
+    : `Confirmamos precio final tras la visita.`;
   return `
     <div style="padding:0 24px 12px;">
       <div style="background:#FE5100; border-radius:10px; padding:12px 14px;">
@@ -3270,14 +3514,18 @@ function buildContactBlockHtml(monthlySavings) {
   `;
 }
 
-function buildDisclaimerBlockHtml(selfSharePct, injectionSharePct, includesBattery) {
+function buildDisclaimerBlockHtml(selfSharePct, injectionSharePct, includesBattery, extraNotes) {
   const batteryNote = includesBattery ? '(sistema con batería)' : '(sistema sin batería)';
   const tarifasLine = selfSharePct != null
     ? `Se han tomado como referencia las siguientes tarifas promedio de energía: ${fmtCLP0(PDF_TARIFA)}/kWh para consumo y ${fmtCLP0(PDF_TARIFA_INYECCION)}/kWh para energía inyectada a la red, y un autoconsumo estimado del ${selfSharePct}% (${injectionSharePct}% inyectado a la red) ${batteryNote}.`
     : '';
+  const extraNotesHtml = (extraNotes || [])
+    .map(note => `<p style="font-size:8px; color:#9ca3af; line-height:1.5; margin:0 0 6px;">${note}</p>`)
+    .join('');
   return `
     <div style="background:#f9fafb; padding:10px 24px; border-top:1px solid #eee;">
       ${tarifasLine ? `<p style="font-size:8px; color:#9ca3af; line-height:1.5; margin:0 0 6px;">${tarifasLine}</p>` : ''}
+      ${extraNotesHtml}
       <p style="font-size:8px; color:#9ca3af; line-height:1.5; margin:0;">${PDF_DISCLAIMER}</p>
     </div>
   `;
@@ -3380,21 +3628,8 @@ function buildClimatePdfSections(q, data) {
     { icon: '🛡️', label: 'Garantía de instalación' },
     { icon: '🔧', label: 'Servicio post-venta' },
     { icon: '📞', label: 'Soporte técnico' },
-    { icon: '✅', label: 'Cumple normativa SEC' }
+    { icon: '✅', label: 'Equipos de primer nivel' }
   ];
-
-  const necesidadIcon = { frio: '❄️', calor: '🔥', ambas: '❄️🔥' }[q.necesidad] || '🌡️';
-  const necesidadLabel = { frio: 'Frío', calor: 'Calor', ambas: 'Frío y calor' }[q.necesidad] || '—';
-  const equipoTipoLabel = { fijo: 'Split Muro', portatil: 'Portátil' }[q.tipoEquipo] || '—';
-
-  let capacidadSub;
-  if (q.cargaFrioBTU && q.cargaCalorBTU) {
-    capacidadSub = `❄️ ${q.equipo.capFrioReal.toLocaleString('es-CL')} / 🔥 ${q.equipo.capCalorReal.toLocaleString('es-CL')} BTU/h`;
-  } else if (q.cargaFrioBTU) {
-    capacidadSub = `${q.equipo.capFrioReal.toLocaleString('es-CL')} BTU/h`;
-  } else {
-    capacidadSub = `${q.equipo.capCalorReal.toLocaleString('es-CL')} BTU/h`;
-  }
 
   const sections = [];
 
@@ -3418,35 +3653,58 @@ function buildClimatePdfSections(q, data) {
   sections.push(`
     <div style="padding:14px 24px 10px;">
       <p style="font-size:9px; color:#9ca3af; font-weight:800; letter-spacing:.5px; margin:0 0 4px;">PROYECTO RECOMENDADO</p>
-      <h1 style="font-size:17px; font-weight:800; color:#0D1B2A; margin:0 0 7px; line-height:1.3;">Climatización — <span style="color:#7253C8;">${q.equipo.modelo}</span></h1>
+      <h1 style="font-size:17px; font-weight:800; color:#0D1B2A; margin:0 0 7px; line-height:1.3;">Climatización</h1>
       <p style="font-size:10px; color:#6b7280; margin:0;">${data.clientName || 'Cliente Abastible'} · ${data.address}</p>
       ${data.clientEmail ? `<p style="font-size:9px; color:#9ca3af; margin:2px 0 0;">${data.clientEmail}</p>` : ''}
       ${data.clientPhone ? `<p style="font-size:9px; color:#9ca3af; margin:2px 0 0;">${data.clientPhone}</p>` : ''}
     </div>
   `);
 
-  sections.push(`
-    <div style="background:#0D1B2A; padding:12px 24px;">
-      <p style="color:#fff; font-size:9px; font-weight:800; letter-spacing:.6px; margin:0 0 10px; text-align:center;">TU SOLUCIÓN DE CLIMATIZACIÓN</p>
-      <div style="display:flex; justify-content:center; gap:10px; flex-wrap:wrap;">
-        <div style="text-align:center; width:60px;">
-          <div style="width:32px; height:32px; border-radius:50%; border:1.5px solid #7253C8; display:flex; align-items:center; justify-content:center; margin:0 auto 4px; font-size:12px;">${necesidadIcon}</div>
-          <p style="color:#fff; font-size:7px; font-weight:700; margin:0 0 1px;">Necesidad</p>
-          <p style="color:#9fb3c8; font-size:6.5px; margin:0;">${necesidadLabel}</p>
-        </div>
-        <div style="text-align:center; width:60px;">
-          <div style="width:32px; height:32px; border-radius:50%; border:1.5px solid #7253C8; display:flex; align-items:center; justify-content:center; margin:0 auto 4px; font-size:12px;">${q.tipoEquipo === 'portatil' ? '🧳' : '🧊'}</div>
-          <p style="color:#fff; font-size:7px; font-weight:700; margin:0 0 1px;">Tipo</p>
-          <p style="color:#9fb3c8; font-size:6.5px; margin:0;">${equipoTipoLabel}</p>
-        </div>
-        <div style="text-align:center; width:76px;">
-          <div style="width:32px; height:32px; border-radius:50%; border:1.5px solid #7253C8; display:flex; align-items:center; justify-content:center; margin:0 auto 4px; font-size:12px;">⚡</div>
-          <p style="color:#fff; font-size:7px; font-weight:700; margin:0 0 1px;">Capacidad</p>
-          <p style="color:#9fb3c8; font-size:6.5px; margin:0;">${capacidadSub}</p>
+  // Un rectángulo azul "TU SOLUCIÓN DE CLIMATIZACIÓN HABITACIÓN n" por cada
+  // habitación cotizada.
+  q.rooms.forEach((r, i) => {
+    const necesidadIcon = { frio: '❄️', calor: '🔥', ambas: '❄️🔥' }[r.necesidad] || '🌡️';
+    const necesidadLabel = { frio: 'Frío', calor: 'Calor', ambas: 'Frío y calor' }[r.necesidad] || '—';
+    const equipoTipoLabel = { fijo: 'Split Muro', portatil: 'Portátil' }[r.tipoEquipo] || '—';
+    const modelosLabel = climateAgruparEquiposLabel(r.equipos);
+
+    let capacidadSub;
+    if (r.cargaFrioBTU && r.cargaCalorBTU) {
+      capacidadSub = `❄️ ${r.capFrioTotal.toLocaleString('es-CL')} / 🔥 ${r.capCalorTotal.toLocaleString('es-CL')} BTU/h`;
+    } else if (r.cargaFrioBTU) {
+      capacidadSub = `${r.capFrioTotal.toLocaleString('es-CL')} BTU/h`;
+    } else {
+      capacidadSub = `${r.capCalorTotal.toLocaleString('es-CL')} BTU/h`;
+    }
+
+    sections.push(`
+      <div style="background:#0D1B2A; padding:12px 24px;">
+        <p style="color:#fff; font-size:9px; font-weight:800; letter-spacing:.6px; margin:0 0 10px; text-align:center;">TU SOLUCIÓN DE CLIMATIZACIÓN HABITACIÓN ${i + 1}</p>
+        <div style="display:flex; justify-content:center; gap:10px; flex-wrap:wrap;">
+          <div style="text-align:center; width:60px;">
+            <div style="width:32px; height:32px; border-radius:50%; border:1.5px solid #7253C8; display:flex; align-items:center; justify-content:center; margin:0 auto 4px; font-size:12px;">${necesidadIcon}</div>
+            <p style="color:#fff; font-size:7px; font-weight:700; margin:0 0 1px;">Necesidad</p>
+            <p style="color:#9fb3c8; font-size:6.5px; margin:0;">${necesidadLabel}</p>
+          </div>
+          <div style="text-align:center; width:60px;">
+            <div style="width:32px; height:32px; border-radius:50%; border:1.5px solid #7253C8; display:flex; align-items:center; justify-content:center; margin:0 auto 4px; font-size:12px;">${r.tipoEquipo === 'portatil' ? '🧳' : '🧊'}</div>
+            <p style="color:#fff; font-size:7px; font-weight:700; margin:0 0 1px;">Tipo</p>
+            <p style="color:#9fb3c8; font-size:6.5px; margin:0;">${equipoTipoLabel}</p>
+          </div>
+          <div style="text-align:center; width:76px;">
+            <div style="width:32px; height:32px; border-radius:50%; border:1.5px solid #7253C8; display:flex; align-items:center; justify-content:center; margin:0 auto 4px; font-size:12px;">⚡</div>
+            <p style="color:#fff; font-size:7px; font-weight:700; margin:0 0 1px;">Capacidad</p>
+            <p style="color:#9fb3c8; font-size:6.5px; margin:0;">${capacidadSub}</p>
+          </div>
+          <div style="text-align:center; width:${modelosLabel.length > 1 ? 92 : 76}px;">
+            <div style="width:32px; height:32px; border-radius:4px; border:1.5px solid #7253C8; background:transparent; display:flex; align-items:center; justify-content:center; margin:0 auto 4px; font-size:12px;">🔧</div>
+            <p style="color:#fff; font-size:7px; font-weight:700; margin:0 0 1px;">Equipos</p>
+            <p style="color:#9fb3c8; font-size:6.5px; margin:0; line-height:1.35;">${modelosLabel.join('<br>')}</p>
+          </div>
         </div>
       </div>
-    </div>
-  `);
+    `);
+  });
 
   sections.push(`
     <div style="padding:12px 24px 4px;">
@@ -3454,7 +3712,7 @@ function buildClimatePdfSections(q, data) {
         <span style="font-size:11px; font-weight:800; color:#0D1B2A;">INVERSIÓN TOTAL</span>
         <span style="font-size:18px; font-weight:800; color:#FE5100;">${fmtCLP0(q.totalCost)}</span>
       </div>
-      <p style="font-size:7.5px; color:#9ca3af; margin:6px 2px 0; line-height:1.4;">Incluye equipo e instalación.</p>
+      <p style="font-size:7.5px; color:#9ca3af; margin:6px 2px 0; line-height:1.4;">Incluye equipo${q.rooms.length > 1 ? 's' : ''} e instalación${q.rooms.length > 1 ? ` para las ${q.rooms.length} habitaciones cotizadas` : ''}.</p>
     </div>
   `);
 
@@ -3478,4 +3736,3 @@ function downloadClimateQuotePDF() {
 </script>
 </body>
 </html>
-
