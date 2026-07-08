@@ -897,18 +897,36 @@ function sqRepartirPaneles(pisoActual, techoActual, maxPiso, maxTecho, nuevoTota
   return { piso, techo };
 }
 
+// Calcula cuántos paneles caben en el piso, de forma independiente al techo.
+// Si el arreglo resultante es de menos de PISO_UMBRAL_PANELES paneles, se usa
+// el mismo factor de aprovechamiento que el techo (90%). Si el espacio da
+// para 20 paneles o más a ese 90%, entonces todo el arreglo se recalcula con
+// un factor más bajo (50%): arreglos grandes en piso necesitan más
+// pasillos/holgura entre filas para mantenimiento y sombras.
+const PISO_UMBRAL_PANELES = 20;
+const PISO_FACTOR_CHICO = 0.90;   // arreglos de menos de 20 paneles
+const PISO_FACTOR_GRANDE = 0.50;  // arreglos de 20 paneles o más
+
+function sqMaxPanelsPiso(floorM2, panelAreaM2) {
+  const candidatoChico = Math.max(0, Math.floor(floorM2 / (panelAreaM2 / PISO_FACTOR_CHICO)));
+  if (candidatoChico < PISO_UMBRAL_PANELES) {
+    return candidatoChico;
+  }
+  return Math.max(0, Math.floor(floorM2 / (panelAreaM2 / PISO_FACTOR_GRANDE)));
+}
+
 function calculateSolarQuotation() {
   // ── Parámetros fijos del modelo ──
   const IRRADIANCIA_PROMEDIO = 230;   // W/m² promedio
   const PR_TECHO = 0.70;              // factor de rendimiento — paneles en techo
-  const PR_PISO = 0.85;               // factor de rendimiento — paneles en piso
+  const PR_PISO = 0.82;               // factor de rendimiento — paneles en piso
   const TARIFA = 210;                 // CLP/kWh — valor del autoconsumo (consumo evitado)
   const TARIFA_INYECCION = 105;       // CLP/kWh — valor de los excedentes inyectados a la red
-  const PANEL_WP = 600;               // W por panel
+  const PANEL_WP = 630;               // W por panel
   const PANEL_AREA_M2 = 1.1 * 2.4;    // m² por panel en techo (2.64 m²)
-  const DENSIDAD_PISO_FACTOR = 0.6;   // en piso caben 60% de los paneles/m² que en techo
+  const TECHO_FACTOR = 0.90;          // solo el 90% del techo se puede cubrir con paneles (dejando espacio de holgura/acceso)
   const COSTO_POR_KWP = 850000;       // CLP/kWp instalado (paneles)
-  const COSTO_BATERIA_KWH = 200000;   // CLP/kWh de batería
+  const COSTO_BATERIA_KWH = 310000;   // CLP/kWh de batería
   const FRACCION_CONSUMO_NOCTURNO = 0.30; // % del consumo diario que ocurre fuera de horas de sol (batería lo cubre)
 
   const data = solarQuoterState.data;
@@ -935,8 +953,8 @@ function calculateSolarQuotation() {
   const areaTotal = parseFloat(data.areaM2) || 0;
   const roofM2 = data.installTecho ? areaTotal : 0;
   const floorM2 = data.installPiso ? areaTotal : 0;
-  const maxPanelsTecho = Math.max(0, Math.floor(roofM2 / PANEL_AREA_M2));
-  const maxPanelsPiso = Math.max(0, Math.floor((floorM2 * DENSIDAD_PISO_FACTOR) / PANEL_AREA_M2));
+  const maxPanelsTecho = Math.max(0, Math.floor((roofM2 * TECHO_FACTOR) / PANEL_AREA_M2));
+  const maxPanelsPiso = sqMaxPanelsPiso(floorM2, PANEL_AREA_M2);
 
   // Se prioriza el piso primero (mejor rendimiento por panel → menos paneles y
   // menor costo para llegar al mismo objetivo de generación); el techo completa el resto.
@@ -1658,8 +1676,9 @@ function closeEVQuoter() {
 function calculateEVQuotation() {
   // ── Parámetros fijos del modelo ──
   const COSTO_CARGADOR = 800000;          // CLP por cargador (equipo)
-  const COSTO_INSTALACION_PUNTO = 400000; // CLP por punto de carga instalado (mano de obra)
-  const COSTO_CABLEADO_METRO = 20000;     // CLP por metro de cableado (incluye materiales y obra)
+  const COSTO_INSTALACION_PRIMER_PUNTO = 600000;      // CLP — instalación del primer punto (más cara: intervención inicial del tablero eléctrico)
+  const COSTO_INSTALACION_PUNTO_ADICIONAL = 300000;   // CLP — cada punto de carga adicional
+  const COSTO_CABLEADO_METRO = 21000;     // CLP por metro de cableado (incluye materiales y obra)
   const COSTO_BASE_TERCEROS = 200000;     // CLP, una vez — si es carga de terceros (plataforma de pago/gestión)
   const COSTO_TERCEROS_POR_CARGADOR = 50000; // CLP por cada cargador adicional, si es de terceros
 
@@ -1671,7 +1690,7 @@ function calculateEVQuotation() {
   // El cableado se cuenta por cada punto de carga (cada uno necesita su propio
   // circuito desde el tablero eléctrico hasta el estacionamiento).
   const chargerCost = numChargers * COSTO_CARGADOR;
-  const installCost = numChargers * COSTO_INSTALACION_PUNTO;
+  const installCost = COSTO_INSTALACION_PRIMER_PUNTO + Math.max(0, numChargers - 1) * COSTO_INSTALACION_PUNTO_ADICIONAL;
   const cableCost = numChargers * cableDistanceM * COSTO_CABLEADO_METRO;
   const terceirosCost = esTerceros ? (COSTO_BASE_TERCEROS + numChargers * COSTO_TERCEROS_POR_CARGADOR) : 0;
   const totalCost = chargerCost + installCost + cableCost + terceirosCost;
@@ -2169,7 +2188,7 @@ const CLIMATE_BASE_W_M3 = 37; // W por m³ de volumen (base de carga térmica)
 const CLIMATE_ORIENTACION_FACTOR = { norte: 260, sur: 100, este: 160, oeste: 300 }; // W/m²
 
 // Mismo factor de aislación para frío y calor (una buena aislación ayuda en ambos casos)
-const CLIMATE_AISLACION_FACTOR = { liviana: 1.30, estandar: 1.00, alta: 0.75 };
+const CLIMATE_AISLACION_FACTOR = { liviana: 1.40, estandar: 1.00, alta: 0.75 };
 
 // TODO: este módulo todavía no pide ubicación/comuna, así que no hay zona
 // climática real que aplicar — se usa un factor neutro (zona "Centro") por
@@ -2180,7 +2199,7 @@ const CLIMATE_ZONA_FACTOR = { frio: 1.00, calor: 1.00 };
 // Ocupación y equipos que generan calor, derivados del uso del espacio
 // (no se le pregunta al cliente directamente, para mantener el flujo corto)
 const CLIMATE_M2_POR_PERSONA = { residencial: 25, comercial: 8, industrial: 40 };
-const CLIMATE_EQUIPOS_W_M2 = { residencial: 3, comercial: 8, industrial: 15 };
+const CLIMATE_EQUIPOS_W_M2 = { residencial: 3, comercial: 8, industrial: 30 };
 
 // Los portátiles rinden ~30% menos que su capacidad nominal en condiciones
 // reales (norma SACC vs. ASHRAE) por la presión negativa y el compresor
@@ -2189,10 +2208,10 @@ const CLIMATE_PORTATIL_DERATE = 0.70;
 
 // Catálogo Split Muro (frío = calor, mismo BTU nominal en ambos modos)
 const CLIMATE_CATALOGO_FIJO = [
-  { modelo: 'GES9ECOFLOW-N', frioBTU: 9000, calorBTU: 9000, costoEquipo: 294990, costoInstalacion: 400000 },
-  { modelo: 'GES12ECOFLOW-N', frioBTU: 12000, calorBTU: 12000, costoEquipo: 315990, costoInstalacion: 400000 },
-  { modelo: 'GES18ECOFLOW-N', frioBTU: 18000, calorBTU: 18000, costoEquipo: 449990, costoInstalacion: 500000 },
-  { modelo: 'GES24ECOFLOW-N', frioBTU: 24000, calorBTU: 24000, costoEquipo: 565990, costoInstalacion: 500000 }
+  { modelo: 'GES9ECOFLOW-N', frioBTU: 9000, calorBTU: 9000, costoEquipo: 294990, costoInstalacion: 350000 },
+  { modelo: 'GES12ECOFLOW-N', frioBTU: 12000, calorBTU: 12000, costoEquipo: 315990, costoInstalacion: 350000 },
+  { modelo: 'GES18ECOFLOW-N', frioBTU: 18000, calorBTU: 18000, costoEquipo: 449990, costoInstalacion: 350000 },
+  { modelo: 'GES24ECOFLOW-N', frioBTU: 24000, calorBTU: 24000, costoEquipo: 565990, costoInstalacion: 350000 }
 ];
 
 // Catálogo Portátil (calor nominal es menor que frío — EVPORT-9 no trae
