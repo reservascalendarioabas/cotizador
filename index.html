@@ -401,6 +401,7 @@ body {
 .sq-payment-option-desc { color: rgba(255,255,255,0.5); font-size: 12px; margin: 0; }
 .sq-payment-check { width: 20px; height: 20px; background: #3b82f6; border-radius: 50%; color: #fff; font-size: 12px; display: flex; align-items: center; justify-content: center; }
 .sq-payment-note { color: rgba(255,255,255,0.4); font-size: 11px; text-align: center; margin-bottom: 16px; }
+.sq-missing-hint { color: #f87171; font-size: 12px; text-align: center; margin: -6px 0 12px; }
 
 /* ── Calendario real ── */
 .sq-calendar { border: 2px solid #e5e7eb; border-radius: 16px; padding: 14px; }
@@ -1433,10 +1434,16 @@ function sqRenderCalendar() {
 
 function sqUpdateStep6Button() {
   const btn = document.getElementById('sq-step6-pay-btn');
+  const hint = document.getElementById('sq-step6-missing');
   if (!btn) return;
   const data = solarQuoterState.data;
-  const ok = data.clientName.trim() && sqIsValidEmail(data.clientEmail) && data.clientPhone.trim() && data.visitDate && data.visitTime;
+  const missing = sqMissingFieldsList(data);
+  const ok = missing.length === 0;
   btn.classList.toggle('disabled', !ok);
+  if (hint) {
+    hint.textContent = ok ? '' : `Falta completar: ${missing.join(', ')}`;
+    hint.style.display = ok ? 'none' : 'block';
+  }
 }
 
 
@@ -1499,7 +1506,8 @@ function renderStep6() {
         </div>
         
         <p class="sq-payment-note">* Este monto se descuenta del presupuesto final si contratas</p>
-        
+        <p class="sq-missing-hint" id="sq-step6-missing" style="${canPay ? 'display:none;' : ''}">${canPay ? '' : `Falta completar: ${sqMissingFieldsList(data).join(', ')}`}</p>
+
         <div class="sq-btn-row">
           <button class="sq-btn-icon dark" onclick="prevSolarStep()">‹</button>
           <button class="sq-btn-primary ${!canPay ? 'disabled' : ''}" id="sq-step6-pay-btn" onclick="if(solarQuoterState.data.clientName.trim() && sqIsValidEmail(solarQuoterState.data.clientEmail) && solarQuoterState.data.clientPhone.trim() && solarQuoterState.data.visitDate && solarQuoterState.data.visitTime) processSolarPayment()">
@@ -1932,8 +1940,14 @@ function evUpdateStep6Button() {
   const btn = document.getElementById('ev-step6-pay-btn');
   if (!btn) return;
   const data = evQuoterState.data;
-  const ok = data.clientName.trim() && sqIsValidEmail(data.clientEmail) && data.clientPhone.trim() && data.visitDate && data.visitTime;
+  const missing = sqMissingFieldsList(data);
+  const ok = missing.length === 0;
   btn.classList.toggle('disabled', !ok);
+  const hint = document.getElementById('ev-step6-missing');
+  if (hint) {
+    hint.textContent = ok ? '' : `Falta completar: ${missing.join(', ')}`;
+    hint.style.display = ok ? 'none' : 'block';
+  }
 }
 
 function evChangeMonth(delta) {
@@ -2049,6 +2063,7 @@ function renderEVStep6() {
         </div>
 
         <p class="sq-payment-note">* Este monto se descuenta del presupuesto final si contratas</p>
+        <p class="sq-missing-hint" id="ev-step6-missing" style="${canPay ? 'display:none;' : ''}">${canPay ? '' : `Falta completar: ${sqMissingFieldsList(data).join(', ')}`}</p>
 
         <div class="sq-btn-row">
           <button class="sq-btn-icon dark" onclick="prevEVStep()">‹</button>
@@ -2913,6 +2928,7 @@ function renderClimateScheduleStep() {
         </div>
 
         <p class="sq-payment-note">* Este monto se descuenta del presupuesto final si contratas</p>
+        <p class="sq-missing-hint" id="cl-step9-missing" style="${canPay ? 'display:none;' : ''}">${canPay ? '' : `Falta completar: ${sqMissingFieldsList(data).join(', ')}`}</p>
 
         <div class="sq-btn-row">
           <button class="sq-btn-icon dark" onclick="prevClimateStep()">‹</button>
@@ -2928,8 +2944,14 @@ function climateUpdateStep9Button() {
   const btn = document.getElementById('cl-step9-pay-btn');
   if (!btn) return;
   const data = climateQuoterState.data;
-  const ok = data.clientName.trim() && sqIsValidEmail(data.clientEmail) && data.clientPhone.trim() && data.visitDate && data.visitTime;
+  const missing = sqMissingFieldsList(data);
+  const ok = missing.length === 0;
   btn.classList.toggle('disabled', !ok);
+  const hint = document.getElementById('cl-step9-missing');
+  if (hint) {
+    hint.textContent = ok ? '' : `Falta completar: ${missing.join(', ')}`;
+    hint.style.display = ok ? 'none' : 'block';
+  }
 }
 
 function climateChangeMonth(delta) {
@@ -3210,6 +3232,18 @@ const fmtCLP0 = (n) => '$' + Math.round(n).toLocaleString('es-CL');
 // Validación simple de email para los formularios de agenda de visita
 function sqIsValidEmail(v) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((v || '').trim());
+}
+
+// Devuelve la lista de campos que faltan/están inválidos para poder agendar,
+// para mostrarle al usuario exactamente qué le falta en vez de solo bloquear el botón.
+function sqMissingFieldsList(data) {
+  const missing = [];
+  if (!data.clientName.trim()) missing.push('nombre');
+  if (!sqIsValidEmail(data.clientEmail)) missing.push('correo válido');
+  if (!data.clientPhone.trim()) missing.push('teléfono');
+  if (!data.visitDate) missing.push('fecha de visita');
+  if (!data.visitTime) missing.push('horario');
+  return missing;
 }
 
 // ── Rango de inversión (-10% / +15%) — se usa en Solar y Electromovilidad,
