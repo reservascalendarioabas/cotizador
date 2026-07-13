@@ -1002,6 +1002,7 @@ function sqSaveBooking() {
     id: 'b_' + Date.now(),
     product: 'Solar + Almacenamiento',
     clientName: data.clientName,
+    clientEmail: data.clientEmail,
     clientPhone: data.clientPhone,
     address: data.address,
     visitDate: data.visitDate,
@@ -1043,6 +1044,7 @@ function sqSyncToGoogleCalendar(booking) {
   try {
     const params = new URLSearchParams({
       clientName: booking.clientName || '',
+      clientEmail: booking.clientEmail || '',
       clientPhone: booking.clientPhone || '',
       address: booking.address || '',
       product: booking.product || '',
@@ -1433,7 +1435,7 @@ function sqUpdateStep6Button() {
   const btn = document.getElementById('sq-step6-pay-btn');
   if (!btn) return;
   const data = solarQuoterState.data;
-  const ok = data.clientName.trim() && data.clientPhone.trim() && data.visitDate && data.visitTime;
+  const ok = data.clientName.trim() && sqIsValidEmail(data.clientEmail) && data.clientPhone.trim() && data.visitDate && data.visitTime;
   btn.classList.toggle('disabled', !ok);
 }
 
@@ -1441,7 +1443,7 @@ function sqUpdateStep6Button() {
 function renderStep6() {
   const data = solarQuoterState.data;
   const times = ['09:00 - 12:00', '12:00 - 15:00', '15:00 - 18:00', '18:00 - 20:00'];
-  const canPay = data.clientName.trim() && data.clientPhone.trim() && data.visitDate && data.visitTime;
+  const canPay = data.clientName.trim() && sqIsValidEmail(data.clientEmail) && data.clientPhone.trim() && data.visitDate && data.visitTime;
   const visitaCost = data.cuponAplicado ? 0 : COSTO_VISITA_TECNICA;
 
   return `
@@ -1453,6 +1455,10 @@ function renderStep6() {
       <div class="sq-field">
         <label>Nombre completo</label>
         <input type="text" id="sq-client-name" placeholder="Ej: María Pérez" value="${data.clientName}" oninput="solarQuoterState.data.clientName = this.value; sqUpdateStep6Button();">
+      </div>
+      <div class="sq-field">
+        <label>Correo electrónico</label>
+        <input type="email" id="sq-client-email" placeholder="Ej: maria@empresa.cl" value="${data.clientEmail}" oninput="solarQuoterState.data.clientEmail = this.value; sqUpdateStep6Button();">
       </div>
       <div class="sq-field">
         <label>Teléfono de contacto</label>
@@ -1496,7 +1502,7 @@ function renderStep6() {
         
         <div class="sq-btn-row">
           <button class="sq-btn-icon dark" onclick="prevSolarStep()">‹</button>
-          <button class="sq-btn-primary ${!canPay ? 'disabled' : ''}" id="sq-step6-pay-btn" onclick="if(solarQuoterState.data.clientName.trim() && solarQuoterState.data.clientPhone.trim() && solarQuoterState.data.visitDate && solarQuoterState.data.visitTime) processSolarPayment()">
+          <button class="sq-btn-primary ${!canPay ? 'disabled' : ''}" id="sq-step6-pay-btn" onclick="if(solarQuoterState.data.clientName.trim() && sqIsValidEmail(solarQuoterState.data.clientEmail) && solarQuoterState.data.clientPhone.trim() && solarQuoterState.data.visitDate && solarQuoterState.data.visitTime) processSolarPayment()">
             ${visitaCost === 0 ? '✅ Confirmar visita (gratis)' : `🔒 Pagar ${fmtCLP0(visitaCost)}`}
           </button>
         </div>
@@ -1529,6 +1535,7 @@ function renderSuccess() {
         </div>
       </div>
       
+      <button class="sq-btn-primary orange" style="margin-bottom:10px;" onclick="sqRequestDownload('solar')">📄 Descargar propuesta</button>
       <button class="sq-btn-primary green" onclick="closeSolarQuoter()">Volver al inicio</button>
     </div>`;
 }
@@ -1675,6 +1682,7 @@ function evSaveBooking() {
     id: 'b_' + Date.now(),
     product: 'Electromovilidad',
     clientName: data.clientName,
+    clientEmail: data.clientEmail,
     clientPhone: data.clientPhone,
     address: data.address,
     visitDate: data.visitDate,
@@ -1924,7 +1932,7 @@ function evUpdateStep6Button() {
   const btn = document.getElementById('ev-step6-pay-btn');
   if (!btn) return;
   const data = evQuoterState.data;
-  const ok = data.clientName.trim() && data.clientPhone.trim() && data.visitDate && data.visitTime;
+  const ok = data.clientName.trim() && sqIsValidEmail(data.clientEmail) && data.clientPhone.trim() && data.visitDate && data.visitTime;
   btn.classList.toggle('disabled', !ok);
 }
 
@@ -1985,7 +1993,7 @@ function evRenderCalendar() {
 function renderEVStep6() {
   const data = evQuoterState.data;
   const times = ['09:00 - 12:00', '12:00 - 15:00', '15:00 - 18:00', '18:00 - 20:00'];
-  const canPay = data.clientName.trim() && data.clientPhone.trim() && data.visitDate && data.visitTime;
+  const canPay = data.clientName.trim() && sqIsValidEmail(data.clientEmail) && data.clientPhone.trim() && data.visitDate && data.visitTime;
   const visitaCost = data.cuponAplicado ? 0 : COSTO_VISITA_TECNICA;
 
   return `
@@ -1997,6 +2005,10 @@ function renderEVStep6() {
       <div class="sq-field">
         <label>Nombre completo</label>
         <input type="text" id="ev-client-name" placeholder="Ej: María Pérez" value="${data.clientName}" oninput="evQuoterState.data.clientName = this.value; evUpdateStep6Button();">
+      </div>
+      <div class="sq-field">
+        <label>Correo electrónico</label>
+        <input type="email" id="ev-client-email" placeholder="Ej: maria@empresa.cl" value="${data.clientEmail}" oninput="evQuoterState.data.clientEmail = this.value; evUpdateStep6Button();">
       </div>
       <div class="sq-field">
         <label>Teléfono de contacto</label>
@@ -2040,7 +2052,7 @@ function renderEVStep6() {
 
         <div class="sq-btn-row">
           <button class="sq-btn-icon dark" onclick="prevEVStep()">‹</button>
-          <button class="sq-btn-primary ${!canPay ? 'disabled' : ''}" id="ev-step6-pay-btn" onclick="if(evQuoterState.data.clientName.trim() && evQuoterState.data.clientPhone.trim() && evQuoterState.data.visitDate && evQuoterState.data.visitTime) processEVPayment()">
+          <button class="sq-btn-primary ${!canPay ? 'disabled' : ''}" id="ev-step6-pay-btn" onclick="if(evQuoterState.data.clientName.trim() && sqIsValidEmail(evQuoterState.data.clientEmail) && evQuoterState.data.clientPhone.trim() && evQuoterState.data.visitDate && evQuoterState.data.visitTime) processEVPayment()">
             ${visitaCost === 0 ? '✅ Confirmar visita (gratis)' : `🔒 Pagar ${fmtCLP0(visitaCost)}`}
           </button>
         </div>
@@ -2073,6 +2085,7 @@ function renderEVSuccess() {
         </div>
       </div>
 
+      <button class="sq-btn-primary orange" style="margin-bottom:10px;" onclick="sqRequestDownload('ev')">📄 Descargar propuesta</button>
       <button class="sq-btn-primary green" onclick="closeEVQuoter()">Volver al inicio</button>
     </div>`;
 }
@@ -2638,13 +2651,13 @@ function renderClimateStep5() {
 function renderClimateStep6() {
   const rooms = climateQuoterState.data.rooms;
   const keys = ['ventanaNorte', 'ventanaSur', 'ventanaEste', 'ventanaOeste'];
-  const canContinue = rooms.every(r => keys.every(k => r[k] !== '' && parseFloat(r[k]) >= 0));
+  const canContinue = rooms.every(r => keys.every(k => r[k] === '' || parseFloat(r[k]) >= 0));
 
   return `
     <div class="sq-step-content">
       <div class="sq-step-icon blue">🪟</div>
       <h3 class="sq-step-title">m² de ventanas por orientación</h3>
-      <p class="sq-step-desc">Ingresa 0 si no hay ventanas en ese lado</p>
+      <p class="sq-step-desc">Déjalo vacío o ingresa 0 si no hay ventanas en ese lado</p>
 
       ${rooms.map((r, i) => `
         <div class="sq-room-block">
@@ -2672,7 +2685,7 @@ function renderClimateStep6() {
 
       <div class="sq-btn-row">
         <button class="sq-btn-secondary" onclick="prevClimateStep()">‹ Volver</button>
-        <button class="sq-btn-primary ${!canContinue ? 'disabled' : ''}" id="cl-step6-btn" onclick="if(climateQuoterState.data.rooms.every(r => ['ventanaNorte','ventanaSur','ventanaEste','ventanaOeste'].every(k => r[k] !== '' && parseFloat(r[k])>=0))) nextClimateStep()">Continuar</button>
+        <button class="sq-btn-primary ${!canContinue ? 'disabled' : ''}" id="cl-step6-btn" onclick="if(climateQuoterState.data.rooms.every(r => ['ventanaNorte','ventanaSur','ventanaEste','ventanaOeste'].every(k => r[k] === '' || parseFloat(r[k])>=0))) nextClimateStep()">Continuar</button>
       </div>
     </div>`;
 }
@@ -2681,7 +2694,7 @@ function clUpdateStep6Button() {
   const btn = document.getElementById('cl-step6-btn');
   if (!btn) return;
   const keys = ['ventanaNorte', 'ventanaSur', 'ventanaEste', 'ventanaOeste'];
-  const ok = climateQuoterState.data.rooms.every(r => keys.every(k => r[k] !== '' && parseFloat(r[k]) >= 0));
+  const ok = climateQuoterState.data.rooms.every(r => keys.every(k => r[k] === '' || parseFloat(r[k]) >= 0));
   btn.classList.toggle('disabled', !ok);
 }
 
@@ -2844,7 +2857,7 @@ function renderClimateQuoteStep() {
 function renderClimateScheduleStep() {
   const data = climateQuoterState.data;
   const times = ['09:00 - 12:00', '12:00 - 15:00', '15:00 - 18:00', '18:00 - 20:00'];
-  const canPay = data.clientName.trim() && data.clientPhone.trim() && data.visitDate && data.visitTime;
+  const canPay = data.clientName.trim() && sqIsValidEmail(data.clientEmail) && data.clientPhone.trim() && data.visitDate && data.visitTime;
   const visitaCost = data.cuponAplicado ? 0 : COSTO_VISITA_TECNICA;
 
   return `
@@ -2856,6 +2869,10 @@ function renderClimateScheduleStep() {
       <div class="sq-field">
         <label>Nombre completo</label>
         <input type="text" id="cl-client-name" placeholder="Ej: María Pérez" value="${data.clientName}" oninput="climateQuoterState.data.clientName = this.value; climateUpdateStep9Button();">
+      </div>
+      <div class="sq-field">
+        <label>Correo electrónico</label>
+        <input type="email" id="cl-client-email" placeholder="Ej: maria@empresa.cl" value="${data.clientEmail}" oninput="climateQuoterState.data.clientEmail = this.value; climateUpdateStep9Button();">
       </div>
       <div class="sq-field">
         <label>Teléfono de contacto</label>
@@ -2899,7 +2916,7 @@ function renderClimateScheduleStep() {
 
         <div class="sq-btn-row">
           <button class="sq-btn-icon dark" onclick="prevClimateStep()">‹</button>
-          <button class="sq-btn-primary ${!canPay ? 'disabled' : ''}" id="cl-step9-pay-btn" onclick="if(climateQuoterState.data.clientName.trim() && climateQuoterState.data.clientPhone.trim() && climateQuoterState.data.visitDate && climateQuoterState.data.visitTime) processClimatePayment()">
+          <button class="sq-btn-primary ${!canPay ? 'disabled' : ''}" id="cl-step9-pay-btn" onclick="if(climateQuoterState.data.clientName.trim() && sqIsValidEmail(climateQuoterState.data.clientEmail) && climateQuoterState.data.clientPhone.trim() && climateQuoterState.data.visitDate && climateQuoterState.data.visitTime) processClimatePayment()">
             ${visitaCost === 0 ? '✅ Confirmar visita (gratis)' : `🔒 Pagar ${fmtCLP0(visitaCost)}`}
           </button>
         </div>
@@ -2911,7 +2928,7 @@ function climateUpdateStep9Button() {
   const btn = document.getElementById('cl-step9-pay-btn');
   if (!btn) return;
   const data = climateQuoterState.data;
-  const ok = data.clientName.trim() && data.clientPhone.trim() && data.visitDate && data.visitTime;
+  const ok = data.clientName.trim() && sqIsValidEmail(data.clientEmail) && data.clientPhone.trim() && data.visitDate && data.visitTime;
   btn.classList.toggle('disabled', !ok);
 }
 
@@ -2985,6 +3002,7 @@ function climateSaveBooking() {
     id: 'b_' + Date.now(),
     product: 'Climatización',
     clientName: data.clientName,
+    clientEmail: data.clientEmail,
     clientPhone: data.clientPhone,
     address: data.address,
     visitDate: data.visitDate,
@@ -3033,6 +3051,7 @@ function renderClimateSuccess() {
         </div>
       </div>
 
+      <button class="sq-btn-primary orange" style="margin-bottom:10px;" onclick="sqRequestDownload('climate')">📄 Descargar propuesta</button>
       <button class="sq-btn-primary" style="background:linear-gradient(135deg, #7253C8, #4E3899);" onclick="closeClimateQuoter()">Volver al inicio</button>
     </div>`;
 }
@@ -3083,6 +3102,7 @@ function sqRenderAdminList() {
           <th>Fecha</th>
           <th>Horario</th>
           <th>Cliente</th>
+          <th>Email</th>
           <th>Teléfono</th>
           <th>Dirección</th>
           <th>Producto</th>
@@ -3096,6 +3116,7 @@ function sqRenderAdminList() {
             <td>${sqFormatHuman(b.visitDate)}</td>
             <td>${b.visitTime}</td>
             <td>${b.clientName}</td>
+            <td>${b.clientEmail || '—'}</td>
             <td>${b.clientPhone}</td>
             <td>${b.address}</td>
             <td>${b.product || '—'}</td>
@@ -3186,22 +3207,28 @@ const PDF_TARIFA_INYECCION = 105;  // CLP/kWh
 
 const fmtCLP0 = (n) => '$' + Math.round(n).toLocaleString('es-CL');
 
-// ── Rango de inversión (±15%) — se usa en Solar y Electromovilidad, tanto en
-// el resultado dentro de la app como en el PDF descargable. Climatización no
-// se ve afectada.
-const RANGO_INVERSION_PCT = 0.15;
+// Validación simple de email para los formularios de agenda de visita
+function sqIsValidEmail(v) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((v || '').trim());
+}
 
-// Formatea un monto central como rango en CLP completo, ej: "$4.250.000 - $5.750.000"
-function fmtRangoCLP(n, pct = RANGO_INVERSION_PCT) {
-  const low = n * (1 - pct);
-  const high = n * (1 + pct);
+// ── Rango de inversión (-10% / +15%) — se usa en Solar y Electromovilidad,
+// tanto en el resultado dentro de la app como en el PDF descargable.
+// Climatización no se ve afectada.
+const RANGO_INVERSION_PCT_BAJO = 0.10;
+const RANGO_INVERSION_PCT_ALTO = 0.15;
+
+// Formatea un monto central como rango en CLP completo, ej: "$4.500.000 - $5.750.000"
+function fmtRangoCLP(n, pctBajo = RANGO_INVERSION_PCT_BAJO, pctAlto = RANGO_INVERSION_PCT_ALTO) {
+  const low = n * (1 - pctBajo);
+  const high = n * (1 + pctAlto);
   return `${fmtCLP0(low)} - ${fmtCLP0(high)}`;
 }
 
-// Formato corto en millones, ej: "$4.3M - $5.8M" — usado en las tarjetas de la app
-function fmtRangoM(n, pct = RANGO_INVERSION_PCT) {
-  const low = n * (1 - pct);
-  const high = n * (1 + pct);
+// Formato corto en millones, ej: "$4.5M - $5.8M" — usado en las tarjetas de la app
+function fmtRangoM(n, pctBajo = RANGO_INVERSION_PCT_BAJO, pctAlto = RANGO_INVERSION_PCT_ALTO) {
+  const low = n * (1 - pctBajo);
+  const high = n * (1 + pctAlto);
   return `$${(low / 1000000).toFixed(1)}M - $${(high / 1000000).toFixed(1)}M`;
 }
 
