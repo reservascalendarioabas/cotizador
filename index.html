@@ -1283,7 +1283,7 @@ function renderSolarQuoteVisual(q, data) {
         
         <div class="sq-quote-total">
           <span>Inversión total</span>
-          <span class="sq-quote-price">$${(q.totalCost/1000000).toFixed(1)}M</span>
+          <span class="sq-quote-price">${fmtRangoM(q.totalCost)}</span>
         </div>
       </div>
       
@@ -1320,7 +1320,7 @@ function sqRenderSolarPaymentModesHtml(q) {
       </div>
       <div class="sq-payment-mode-card">
         <p class="sq-payment-mode-label">AL CONTADO</p>
-        <p class="sq-payment-mode-value">${fmtCLP0(q.totalCost)}</p>
+        <p class="sq-payment-mode-value">${fmtRangoCLP(q.totalCost)}</p>
         <p class="sq-payment-mode-desc">Incluye equipos, instalación y certificación SEC · se recupera en ${q.paybackYears ?? '—'} años.</p>
       </div>
     </div>
@@ -1602,7 +1602,7 @@ function calculateEVQuotation() {
   const COSTO_INSTALACION_PRIMER_PUNTO_ESTANDAR = 600000; // CLP — instalación del primer punto (más cara: intervención inicial del tablero eléctrico)
   const COSTO_CABLEADO_METRO_ESTANDAR = 19000;        // CLP por metro de cableado (incluye materiales y obra)
   // Carga rápida (22kW) — requiere empalme trifásico y tarifa superior a BT1
-  const COSTO_CARGADOR_RAPIDA = 900000;               // CLP por cargador (equipo)
+  const COSTO_CARGADOR_RAPIDA = 1500000;               // CLP por cargador (equipo)
   const COSTO_INSTALACION_PRIMER_PUNTO_RAPIDA = 800000; // CLP — instalación del primer punto
   const COSTO_CABLEADO_METRO_RAPIDA = 26000;          // CLP por metro de cableado (incluye materiales y obra)
   // Comunes a ambos tipos
@@ -1860,7 +1860,7 @@ function renderEVQuoteVisual(q, data) {
 
         <div class="sq-quote-total">
           <span>Inversión total</span>
-          <span class="sq-quote-price">$${(q.totalCost/1000000).toFixed(1)}M</span>
+          <span class="sq-quote-price">${fmtRangoM(q.totalCost)}</span>
         </div>
       </div>
 
@@ -1883,7 +1883,7 @@ function sqRenderEVPaymentModesHtml(q) {
       </div>
       <div class="sq-payment-mode-card">
         <p class="sq-payment-mode-label">AL CONTADO</p>
-        <p class="sq-payment-mode-value">${fmtCLP0(q.totalCost)}</p>
+        <p class="sq-payment-mode-value">${fmtRangoCLP(q.totalCost)}</p>
         <p class="sq-payment-mode-desc">Incluye equipos, instalación, cableado y certificación SEC.</p>
       </div>
       <div class="sq-payment-mode-card green">
@@ -2170,7 +2170,7 @@ function closeClimateQuoter() {
    CÁLCULO DE CARGA TÉRMICA Y SELECCIÓN DE EQUIPO (Climatización)
    ══════════════════════════════════════════════════════════════════════════ */
 
-const CLIMATE_BASE_W_M3 = 37; // W por m³ de volumen (base de carga térmica)
+const CLIMATE_BASE_W_M3 = 42; // W por m³ de volumen (base de carga térmica)
 
 // Orientación de ventanas — YA AJUSTADO AL HEMISFERIO SUR (Chile): el Norte es
 // el lado que más sol recibe acá (no el Sur, como en calculadoras europeas).
@@ -2188,7 +2188,7 @@ const CLIMATE_ZONA_FACTOR = { frio: 1.00, calor: 1.00 };
 // Ocupación y equipos que generan calor, derivados del uso del espacio
 // (no se le pregunta al cliente directamente, para mantener el flujo corto)
 const CLIMATE_M2_POR_PERSONA = { residencial: 25, comercial: 8, industrial: 40 };
-const CLIMATE_EQUIPOS_W_M2 = { residencial: 3, comercial: 8, industrial: 30 };
+const CLIMATE_EQUIPOS_W_M2 = { residencial: 6, comercial: 15, industrial: 30 };
 
 // Los portátiles rinden ~30% menos que su capacidad nominal en condiciones
 // reales (norma SACC vs. ASHRAE) por la presión negativa y el compresor
@@ -2260,7 +2260,7 @@ function climateComputeRoomQuote(room) {
   // un 24.000 + un 9.000 para cubrir 26.000 BTU/h.
   const esPortatil = room.tipoEquipo === 'portatil';
   const catalogo = esPortatil ? CLIMATE_CATALOGO_PORTATIL : CLIMATE_CATALOGO_FIJO;
-  const MAX_EQUIPOS = 4; // tope razonable de equipos a proponer juntos por habitación
+  const MAX_EQUIPOS = 8; // tope razonable de equipos a proponer juntos por habitación
 
   function evaluarCombo(indices) {
     let sumFrio = 0, sumCalor = 0, totalCost = 0;
@@ -3186,6 +3186,25 @@ const PDF_TARIFA_INYECCION = 105;  // CLP/kWh
 
 const fmtCLP0 = (n) => '$' + Math.round(n).toLocaleString('es-CL');
 
+// ── Rango de inversión (±15%) — se usa en Solar y Electromovilidad, tanto en
+// el resultado dentro de la app como en el PDF descargable. Climatización no
+// se ve afectada.
+const RANGO_INVERSION_PCT = 0.15;
+
+// Formatea un monto central como rango en CLP completo, ej: "$4.250.000 - $5.750.000"
+function fmtRangoCLP(n, pct = RANGO_INVERSION_PCT) {
+  const low = n * (1 - pct);
+  const high = n * (1 + pct);
+  return `${fmtCLP0(low)} - ${fmtCLP0(high)}`;
+}
+
+// Formato corto en millones, ej: "$4.3M - $5.8M" — usado en las tarjetas de la app
+function fmtRangoM(n, pct = RANGO_INVERSION_PCT) {
+  const low = n * (1 - pct);
+  const high = n * (1 + pct);
+  return `$${(low / 1000000).toFixed(1)}M - $${(high / 1000000).toFixed(1)}M`;
+}
+
 // Construye el HTML del documento para Solar + Almacenamiento
 function buildSolarPdfSections(q, data) {
   const installTypeLabel = data.installTecho ? 'Techo' : (data.installPiso ? 'Piso' : '—');
@@ -3294,7 +3313,7 @@ function buildSolarPdfSections(q, data) {
         </div>
         <div style="flex:1; border:1px solid #e5e7eb; border-radius:10px; padding:10px; background:#f9fafb;">
           <p style="font-size:7.5px; color:#6b7280; font-weight:700; margin:0 0 8px; letter-spacing:.3px;">AL CONTADO</p>
-          <p style="font-size:15px; font-weight:800; color:#0D1B2A; margin:0 0 6px;">${fmtCLP0(q.totalCost)}</p>
+          <p style="font-size:13px; font-weight:800; color:#0D1B2A; margin:0 0 6px;">${fmtRangoCLP(q.totalCost)}</p>
           <p style="font-size:7px; color:#9ca3af; margin:0; line-height:1.4;">Incluye equipos, instalación y certificación SEC · se recupera en ${q.paybackYears ?? '—'} años</p>
         </div>
       </div>
@@ -3422,7 +3441,7 @@ function buildEVPdfSections(q, data) {
         </div>
         <div style="flex:1; border:1px solid #e5e7eb; border-radius:10px; padding:8px; background:#f9fafb;">
           <p style="font-size:7px; color:#6b7280; font-weight:700; margin:0 0 7px; letter-spacing:.2px;">AL CONTADO</p>
-          <p style="font-size:13px; font-weight:800; color:#0D1B2A; margin:0 0 4px;">${fmtCLP0(q.totalCost)}</p>
+          <p style="font-size:11px; font-weight:800; color:#0D1B2A; margin:0 0 4px;">${fmtRangoCLP(q.totalCost)}</p>
           <p style="font-size:6.5px; color:#9ca3af; margin:0; line-height:1.4;">Incluye equipos, instalación, cableado y certificación SEC.</p>
         </div>
         <div style="flex:1; border:1.5px solid #22c55e; border-radius:10px; padding:8px;">
