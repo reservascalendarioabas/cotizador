@@ -1178,7 +1178,7 @@ function renderStep2() {
 
       <div class="sq-field">
         <label>¿Cuántos metros cuadrados tienes disponibles?</label>
-        <input type="number" id="sq-area" min="0" step="1" placeholder="Ej: 40" value="${data.areaM2}" oninput="solarQuoterState.data.areaM2 = this.value; sqUpdateStep2Button();">
+        <input type="text" inputmode="numeric" id="sq-area" placeholder="Ej: 40" value="${sqFmtThousandsValue(data.areaM2)}" oninput="sqHandleThousandsInput(this, v => solarQuoterState.data.areaM2 = v); sqUpdateStep2Button();">
       </div>
 
       <div class="sq-info-box blue">
@@ -1213,7 +1213,7 @@ function renderStep3() {
 
       <div class="sq-field">
         <label>Monto mensual (CLP)</label>
-        <input type="number" id="sq-bill" min="0" step="1000" placeholder="Ej: 80000" value="${data.billAmount}" oninput="solarQuoterState.data.billAmount = this.value; sqUpdateStep3Button();">
+        <input type="text" inputmode="numeric" id="sq-bill" placeholder="Ej: 80.000" value="${sqFmtThousandsValue(data.billAmount)}" oninput="sqHandleThousandsInput(this, v => solarQuoterState.data.billAmount = v); sqUpdateStep3Button();">
       </div>
 
       <div class="sq-btn-row">
@@ -1814,7 +1814,7 @@ function renderEVStep2() {
 
       <div class="sq-field">
         <label>¿Cuántos metros hay entre el estacionamiento y el tablero eléctrico?</label>
-        <input type="number" id="ev-cable-distance" min="0" step="1" placeholder="Ej: 15" value="${data.cableDistanceM}" oninput="evQuoterState.data.cableDistanceM = this.value; evUpdateStep2Button();">
+        <input type="text" inputmode="numeric" id="ev-cable-distance" placeholder="Ej: 15" value="${sqFmtThousandsValue(data.cableDistanceM)}" oninput="sqHandleThousandsInput(this, v => evQuoterState.data.cableDistanceM = v); evUpdateStep2Button();">
       </div>
 
       <div class="sq-field" style="text-align:left;">
@@ -2612,7 +2612,7 @@ function renderClimateStep4() {
           <p class="sq-room-block-title">Habitación ${i + 1}</p>
           <div class="sq-field">
             <label>m² del emplazamiento</label>
-            <input type="number" id="cl-area-${i}" min="0" step="1" placeholder="Ej: 60" value="${r.areaM2}" oninput="climateQuoterState.data.rooms[${i}].areaM2 = this.value; clUpdateStep4Button();">
+            <input type="text" inputmode="numeric" id="cl-area-${i}" placeholder="Ej: 60" value="${sqFmtThousandsValue(r.areaM2)}" oninput="sqHandleThousandsInput(this, v => climateQuoterState.data.rooms[${i}].areaM2 = v); clUpdateStep4Button();">
           </div>
           <div class="sq-field">
             <label>Altura del techo (metros)</label>
@@ -3240,7 +3240,21 @@ const PDF_TARIFA_INYECCION = 105;  // CLP/kWh
 
 const fmtCLP0 = (n) => '$' + Math.round(n).toLocaleString('es-CL');
 
-// Validación simple de email para los formularios de agenda de visita
+// Formatea un input numérico con puntos de miles mientras se escribe, para que
+// sea más fácil leer montos grandes (ej: boleta, m², metros de cableado).
+// El valor "crudo" (solo dígitos, sin puntos) se guarda en el estado a través
+// de `setter`, así los cálculos aguas abajo no cambian.
+function sqHandleThousandsInput(inputEl, setter) {
+  const digits = inputEl.value.replace(/\D/g, '');
+  setter(digits);
+  inputEl.value = digits ? parseInt(digits, 10).toLocaleString('es-CL') : '';
+}
+
+// Formatea un valor crudo (dígitos) para mostrarlo con puntos de miles al renderizar
+function sqFmtThousandsValue(raw) {
+  const digits = String(raw || '').replace(/\D/g, '');
+  return digits ? parseInt(digits, 10).toLocaleString('es-CL') : '';
+}
 function sqIsValidEmail(v) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((v || '').trim());
 }
@@ -3657,6 +3671,8 @@ function buildContactBlockHtml(monthlySavings) {
     <div style="padding:0 24px 12px;">
       <div style="background:#FE5100; border-radius:10px; padding:12px 14px;">
         <p style="font-size:10.5px; font-weight:800; color:#fff; margin:0 0 8px;">¿Avanzamos con tu visita técnica?</p>
+        <p style="font-size:9px; font-weight:700; color:#fff; margin:0 0 1px;">Fabrizio Cattaneo</p>
+        <p style="font-size:7.5px; color:rgba(255,255,255,0.85); margin:0 0 8px;">Líder Proyectos Fotovoltaicos y Electromovilidad</p>
         <div style="display:flex; align-items:center; gap:6px; margin-bottom:5px;">
           <img src="${PDF_ICON_PHONE_WHITE_B64}" style="width:11px;height:11px;">
           <span style="font-size:10px;color:#fff;">${PDF_CONTACT_PHONE}</span>
