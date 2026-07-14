@@ -402,6 +402,15 @@ body {
 .sq-payment-check { width: 20px; height: 20px; background: #3b82f6; border-radius: 50%; color: #fff; font-size: 12px; display: flex; align-items: center; justify-content: center; }
 .sq-payment-note { color: rgba(255,255,255,0.4); font-size: 11px; text-align: center; margin-bottom: 16px; }
 .sq-missing-hint { color: #f87171; font-size: 12px; text-align: center; margin: -6px 0 12px; }
+.sq-financing-table { background:#fff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; margin-top:14px; }
+.sq-financing-title { font-size:13px; font-weight:800; color:#0D1B2A; margin:0; padding:14px 14px 10px; }
+.sq-financing-head { display:flex; background:#f3f4f6; padding:8px 14px; }
+.sq-financing-head span { flex:1; text-align:center; font-size:10px; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.3px; }
+.sq-financing-row { display:flex; padding:10px 14px; border-top:1px solid #f1f1f1; }
+.sq-financing-plazo { flex:1; text-align:center; font-weight:800; color:#0D1B2A; font-size:12px; }
+.sq-financing-value { flex:1; text-align:center; font-weight:800; color:#FE5100; font-size:12px; }
+.sq-financing-value small { font-weight:600; color:#9ca3af; font-size:9px; }
+.sq-financing-note { font-size:10px; color:#9ca3af; text-align:right; margin:0; padding:6px 14px 12px; }
 
 /* ── Calendario real ── */
 .sq-calendar { border: 2px solid #e5e7eb; border-radius: 16px; padding: 14px; }
@@ -861,13 +870,15 @@ function calculateSolarQuotation() {
 
     // Se prioriza el piso primero (mejor rendimiento por panel → menos paneles y
     // menor costo para llegar al mismo objetivo de generación); el techo completa el resto.
-    // Se redondea hacia abajo (floor) a propósito: preferimos quedarnos un poco cortos
-    // de la meta de $0 antes que sobredimensionar el sistema. Si el espacio es la
+    // Se redondea hacia arriba (ceil) a propósito: se busca llevar la boleta a $0,
+    // aceptando que el sistema pueda quedar levemente sobredimensionado antes que
+    // quedarse corto de la meta. Si se pasa, el tope de yearlySavings más abajo
+    // deja la boleta resultante en $0 (nunca negativa). Si el espacio es la
     // limitante real, esto no cambia nada (igual se usa todo el espacio disponible).
-    pisoPanelsUsados = Math.max(0, Math.min(Math.floor(targetGenKwh / (panelKw * yieldPiso)), maxPanelsPiso));
+    pisoPanelsUsados = Math.max(0, Math.min(Math.ceil(targetGenKwh / (panelKw * yieldPiso)), maxPanelsPiso));
     const genPiso = pisoPanelsUsados * panelKw * yieldPiso;
     const remainingGenKwh = Math.max(targetGenKwh - genPiso, 0);
-    techoPanelsUsados = Math.max(0, Math.min(Math.floor(remainingGenKwh / (panelKw * yieldTecho)), maxPanelsTecho));
+    techoPanelsUsados = Math.max(0, Math.min(Math.ceil(remainingGenKwh / (panelKw * yieldTecho)), maxPanelsTecho));
 
     // Resguardo: si el espacio ingresado no alcanza ni para un panel, usa 1 donde haya cabida
     if (pisoPanelsUsados + techoPanelsUsados <= 0) {
@@ -1316,10 +1327,9 @@ function sqRenderSolarPaymentModesHtml(q) {
     <div class="sq-payment-modes">
       <p class="sq-payment-modes-title">Cómo pagar tu proyecto</p>
       <div class="sq-payment-mode-card recommended">
-        <span class="sq-payment-mode-badge orange">RECOMENDADO · $0 PIE</span>
-        <p class="sq-payment-mode-label">LEASING · 48 CUOTAS</p>
+        <span class="sq-payment-mode-badge orange">RECOMENDADO - LEASING</span>
         <p class="sq-payment-mode-value">$0 <small>de pie</small></p>
-        <p class="sq-payment-mode-desc">Cuota mensual a confirmar con tasa, sujeta a evaluación. Tu ahorro estimado (${fmtCLP0(q.monthlySavings)}/mes) ayuda a cubrir la cuota desde el primer mes.</p>
+        <p class="sq-payment-mode-desc">Tu ahorro estimado (${fmtCLP0(q.monthlySavings)}/mes) ayuda a cubrir la cuota desde el primer mes. Cuota mensual sujeta a los planes de financiamiento del cuadro de abajo.</p>
       </div>
       <div class="sq-payment-mode-card">
         <p class="sq-payment-mode-label">AL CONTADO</p>
@@ -1327,6 +1337,7 @@ function sqRenderSolarPaymentModesHtml(q) {
         <p class="sq-payment-mode-desc">Incluye equipos, instalación y certificación SEC · se recupera en ${q.paybackYears ?? '—'} años.</p>
       </div>
     </div>
+    ${sqRenderPlanesFinanciamientoHtml(q.totalCost)}
   `;
 }
 
@@ -1892,10 +1903,9 @@ function sqRenderEVPaymentModesHtml(q) {
     <div class="sq-payment-modes">
       <p class="sq-payment-modes-title">Cómo pagar tu proyecto</p>
       <div class="sq-payment-mode-card recommended">
-        <span class="sq-payment-mode-badge orange">RECOMENDADO</span>
-        <p class="sq-payment-mode-label">LEASING · 48 CUOTAS</p>
+        <span class="sq-payment-mode-badge orange">RECOMENDADO - LEASING</span>
         <p class="sq-payment-mode-value">$0 <small>de pie</small></p>
-        <p class="sq-payment-mode-desc">Cuota mensual a confirmar con tasa, sujeta a evaluación.</p>
+        <p class="sq-payment-mode-desc">Cuota mensual sujeta a los planes de financiamiento del cuadro de abajo.</p>
       </div>
       <div class="sq-payment-mode-card">
         <p class="sq-payment-mode-label">AL CONTADO</p>
@@ -1909,6 +1919,7 @@ function sqRenderEVPaymentModesHtml(q) {
         <p class="sq-payment-mode-desc">Financiamos e instalamos el cargador. Cobramos directo a quienes lo usan, por tarifa de energía.</p>
       </div>
     </div>
+    ${sqRenderPlanesFinanciamientoHtml(q.totalCost)}
   `;
 }
 
@@ -2828,7 +2839,7 @@ function renderClimateQuoteStep() {
 
         <div class="sq-quote-total">
           <span>Inversión habitación ${i + 1}</span>
-          <span class="sq-quote-price">$${(r.totalCost/1000000).toFixed(1)}M</span>
+          <span class="sq-quote-price">$${(r.totalCost/1000000).toFixed(1)}M + IVA</span>
         </div>
       </div>
       ${r.advertencia ? `
@@ -2851,7 +2862,7 @@ function renderClimateQuoteStep() {
 
       <div style="border:2px solid #FE5100; border-radius:12px; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
         <span style="font-size:13px; font-weight:800; color:#0D1B2A;">INVERSIÓN TOTAL</span>
-        <span style="font-size:18px; font-weight:800; color:#FE5100;">$${(q.totalCost/1000000).toFixed(1)}M</span>
+        <span style="font-size:18px; font-weight:800; color:#FE5100;">$${(q.totalCost/1000000).toFixed(1)}M + IVA</span>
       </div>
 
       <div class="sq-share-row">
@@ -3252,18 +3263,90 @@ function sqMissingFieldsList(data) {
 const RANGO_INVERSION_PCT_BAJO = 0.10;
 const RANGO_INVERSION_PCT_ALTO = 0.15;
 
-// Formatea un monto central como rango en CLP completo, ej: "$4.500.000 - $5.750.000"
+// Formatea un monto central como rango en CLP completo, ej: "$4.500.000 - $5.750.000 + IVA"
 function fmtRangoCLP(n, pctBajo = RANGO_INVERSION_PCT_BAJO, pctAlto = RANGO_INVERSION_PCT_ALTO) {
   const low = n * (1 - pctBajo);
   const high = n * (1 + pctAlto);
-  return `${fmtCLP0(low)} - ${fmtCLP0(high)}`;
+  return `${fmtCLP0(low)} - ${fmtCLP0(high)} + IVA`;
 }
 
-// Formato corto en millones, ej: "$4.5M - $5.8M" — usado en las tarjetas de la app
+// Formato corto en millones, ej: "$4.5M - $5.8M + IVA" — usado en las tarjetas de la app
 function fmtRangoM(n, pctBajo = RANGO_INVERSION_PCT_BAJO, pctAlto = RANGO_INVERSION_PCT_ALTO) {
   const low = n * (1 - pctBajo);
   const high = n * (1 + pctAlto);
-  return `$${(low / 1000000).toFixed(1)}M - $${(high / 1000000).toFixed(1)}M`;
+  return `$${(low / 1000000).toFixed(1)}M - $${(high / 1000000).toFixed(1)}M + IVA`;
+}
+
+// ── Planes de leasing (Solar y EV) — $0 de pie, financiamiento a 36/48/60/72/84/96
+// cuotas con una tasa de interés anual del 16%. El monto financiado es el mismo
+// rango de inversión (-10% / +15%) usado en el resto de la cotización, así que
+// cada plazo muestra un rango de cuota (mínimo-máximo), no un valor único.
+const LEASING_TASA_ANUAL = 0.16;
+const LEASING_PLAZOS = [36, 48, 60, 72, 84, 96];
+
+// Cuota mensual de un crédito con cuotas iguales (sistema francés), $0 de pie
+function sqCalcCuotaLeasing(principal, nCuotas, tasaAnual = LEASING_TASA_ANUAL) {
+  const r = tasaAnual / 12;
+  return principal * r / (1 - Math.pow(1 + r, -nCuotas));
+}
+
+// Arma las filas [{ plazo, cuotaLow, cuotaHigh }] para los 6 plazos, en base al
+// mismo rango -10%/+15% de inversión total ya usado en el resto de la cotización.
+function sqLeasingPlanesRows(totalCost) {
+  const low = totalCost * (1 - RANGO_INVERSION_PCT_BAJO);
+  const high = totalCost * (1 + RANGO_INVERSION_PCT_ALTO);
+  return LEASING_PLAZOS.map(n => ({
+    plazo: n,
+    cuotaLow: sqCalcCuotaLeasing(low, n),
+    cuotaHigh: sqCalcCuotaLeasing(high, n)
+  }));
+}
+
+// HTML del cuadro "PLANES DE FINANCIAMIENTO" para la app (Solar y EV) — tabla
+// independiente con columnas Plazo / Cuota mensual desde / Cuota mensual hasta.
+function sqRenderPlanesFinanciamientoHtml(totalCost) {
+  const filas = sqLeasingPlanesRows(totalCost).map(f => `
+    <div class="sq-financing-row">
+      <span class="sq-financing-plazo">${f.plazo} cuotas</span>
+      <span class="sq-financing-value">${fmtCLP0(f.cuotaLow)} <small>+ IVA</small></span>
+      <span class="sq-financing-value">${fmtCLP0(f.cuotaHigh)} <small>+ IVA</small></span>
+    </div>
+  `).join('');
+  return `
+    <div class="sq-financing-table">
+      <p class="sq-financing-title">Planes de financiamiento</p>
+      <div class="sq-financing-head">
+        <span>Plazo</span>
+        <span>Cuota mensual desde</span>
+        <span>Cuota mensual hasta</span>
+      </div>
+      ${filas}
+      <p class="sq-financing-note">Sujeto a evaluación</p>
+    </div>
+  `;
+}
+
+// HTML del cuadro "PLANES DE FINANCIAMIENTO" para el PDF (más compacto)
+function sqRenderPlanesFinanciamientoPdfHtml(totalCost) {
+  const filas = sqLeasingPlanesRows(totalCost).map(f => `
+    <div style="display:flex; padding:5px 10px; border-top:1px solid #f1f1f1;">
+      <span style="flex:1; text-align:center; font-size:6.5px; font-weight:800; color:#0D1B2A;">${f.plazo} cuotas</span>
+      <span style="flex:1; text-align:center; font-size:6.5px; font-weight:800; color:#FE5100;">${fmtCLP0(f.cuotaLow)} <span style="font-size:5px; font-weight:600; color:#9ca3af;">+ IVA</span></span>
+      <span style="flex:1; text-align:center; font-size:6.5px; font-weight:800; color:#FE5100;">${fmtCLP0(f.cuotaHigh)} <span style="font-size:5px; font-weight:600; color:#9ca3af;">+ IVA</span></span>
+    </div>
+  `).join('');
+  return `
+    <div style="border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; margin-top:10px;">
+      <p style="font-size:8px; font-weight:800; color:#0D1B2A; margin:0; padding:8px 10px 6px;">Planes de financiamiento</p>
+      <div style="display:flex; background:#f3f4f6; padding:5px 10px;">
+        <span style="flex:1; text-align:center; font-size:5.5px; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.2px;">Plazo</span>
+        <span style="flex:1; text-align:center; font-size:5.5px; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.2px;">Cuota mensual desde</span>
+        <span style="flex:1; text-align:center; font-size:5.5px; font-weight:700; color:#6b7280; text-transform:uppercase; letter-spacing:.2px;">Cuota mensual hasta</span>
+      </div>
+      ${filas}
+      <p style="font-size:5.5px; color:#9ca3af; margin:0; padding:5px 10px 7px; text-align:right;">Sujeto a evaluación</p>
+    </div>
+  `;
 }
 
 // Construye el HTML del documento para Solar + Almacenamiento
@@ -3366,11 +3449,9 @@ function buildSolarPdfSections(q, data) {
       <p style="font-size:10px; font-weight:800; color:#0D1B2A; margin:0 0 8px;">CÓMO PAGAR TU PROYECTO</p>
       <div style="display:flex; gap:8px;">
         <div style="flex:1; border:1.5px solid #FE5100; border-radius:10px; padding:10px;">
-          <span style="background:#FE5100; color:#fff; font-size:6px; font-weight:800; padding:2px 6px; border-radius:5px; letter-spacing:.2px;">RECOMENDADO · $0 PIE</span>
-          <p style="font-size:7.5px; color:#6b7280; font-weight:700; margin:8px 0 2px; letter-spacing:.3px;">LEASING · 48 CUOTAS</p>
-          <p style="font-size:15px; font-weight:800; color:#0D1B2A; margin:0 0 4px;">$0 <span style="font-size:8.5px; font-weight:600; color:#6b7280;">de pie</span></p>
-          <p style="font-size:7px; color:#9ca3af; margin:0 0 6px; line-height:1.4;">Cuota mensual a confirmar con tasa, sujeta a evaluación.</p>
-          <p style="font-size:7px; color:#6b7280; margin:0; line-height:1.4;">Tu ahorro estimado (${fmtCLP0(q.monthlySavings)}/mes) ayuda a cubrir la cuota desde el primer mes.</p>
+          <span style="background:#FE5100; color:#fff; font-size:6px; font-weight:800; padding:2px 6px; border-radius:5px; letter-spacing:.2px;">RECOMENDADO - LEASING</span>
+          <p style="font-size:15px; font-weight:800; color:#0D1B2A; margin:8px 0 4px;">$0 <span style="font-size:8.5px; font-weight:600; color:#6b7280;">de pie</span></p>
+          <p style="font-size:7px; color:#6b7280; margin:0; line-height:1.4;">Tu ahorro estimado (${fmtCLP0(q.monthlySavings)}/mes) ayuda a cubrir la cuota desde el primer mes. Cuota mensual sujeta a los planes de financiamiento del cuadro de abajo.</p>
         </div>
         <div style="flex:1; border:1px solid #e5e7eb; border-radius:10px; padding:10px; background:#f9fafb;">
           <p style="font-size:7.5px; color:#6b7280; font-weight:700; margin:0 0 8px; letter-spacing:.3px;">AL CONTADO</p>
@@ -3378,6 +3459,7 @@ function buildSolarPdfSections(q, data) {
           <p style="font-size:7px; color:#9ca3af; margin:0; line-height:1.4;">Incluye equipos, instalación y certificación SEC · se recupera en ${q.paybackYears ?? '—'} años</p>
         </div>
       </div>
+      ${sqRenderPlanesFinanciamientoPdfHtml(q.totalCost)}
     </div>
   `);
 
@@ -3495,10 +3577,9 @@ function buildEVPdfSections(q, data) {
       <p style="font-size:10px; font-weight:800; color:#0D1B2A; margin:0 0 8px;">CÓMO PAGAR TU PROYECTO</p>
       <div style="display:flex; gap:6px;">
         <div style="flex:1; border:1.5px solid #FE5100; border-radius:10px; padding:8px;">
-          <span style="background:#FE5100; color:#fff; font-size:5.5px; font-weight:800; padding:2px 5px; border-radius:5px; letter-spacing:.2px;">RECOMENDADO</span>
-          <p style="font-size:7px; color:#6b7280; font-weight:700; margin:7px 0 2px; letter-spacing:.2px;">LEASING · 48 CUOTAS</p>
-          <p style="font-size:13px; font-weight:800; color:#0D1B2A; margin:0 0 4px;">$0 <span style="font-size:7.5px; font-weight:600; color:#6b7280;">de pie</span></p>
-          <p style="font-size:6.5px; color:#9ca3af; margin:0; line-height:1.4;">Cuota mensual a confirmar con tasa, sujeta a evaluación.</p>
+          <span style="background:#FE5100; color:#fff; font-size:5.5px; font-weight:800; padding:2px 5px; border-radius:5px; letter-spacing:.2px;">RECOMENDADO - LEASING</span>
+          <p style="font-size:13px; font-weight:800; color:#0D1B2A; margin:7px 0 4px;">$0 <span style="font-size:7.5px; font-weight:600; color:#6b7280;">de pie</span></p>
+          <p style="font-size:6.5px; color:#9ca3af; margin:0; line-height:1.4;">Cuota mensual sujeta a los planes de financiamiento del cuadro de abajo.</p>
         </div>
         <div style="flex:1; border:1px solid #e5e7eb; border-radius:10px; padding:8px; background:#f9fafb;">
           <p style="font-size:7px; color:#6b7280; font-weight:700; margin:0 0 7px; letter-spacing:.2px;">AL CONTADO</p>
@@ -3512,6 +3593,7 @@ function buildEVPdfSections(q, data) {
           <p style="font-size:6.5px; color:#9ca3af; margin:0; line-height:1.4;">Financiamos e instalamos el cargador. Cobramos directo a quienes lo usan, por tarifa de energía.</p>
         </div>
       </div>
+      ${sqRenderPlanesFinanciamientoPdfHtml(q.totalCost)}
     </div>
   `);
 
@@ -3606,8 +3688,8 @@ function buildDisclaimerBlockHtml(selfSharePct, injectionSharePct, includesBatte
   `;
 }
 
-const PDF_CONTACT_PHONE = '+569 xxxx xxxx';
-const PDF_CONTACT_EMAIL = 'xxxxxxx@abastible.cl';
+const PDF_CONTACT_PHONE = '+569 5732 0447';
+const PDF_CONTACT_EMAIL = 'fabrizio.cattaneo@abastible.cl';
 const PDF_DISCLAIMER = 'Los valores de esta cotización son referenciales y de carácter preliminar. El precio, dimensionamiento y condiciones finales de la instalación se confirman tras una visita técnica a terreno.';
 
 // Contenedor oculto reutilizable para capturar UNA sección a la vez
@@ -3785,7 +3867,7 @@ function buildClimatePdfSections(q, data) {
     <div style="padding:12px 24px 4px;">
       <div style="border:2px solid #FE5100; border-radius:10px; padding:12px 14px; display:flex; justify-content:space-between; align-items:center;">
         <span style="font-size:11px; font-weight:800; color:#0D1B2A;">INVERSIÓN TOTAL</span>
-        <span style="font-size:18px; font-weight:800; color:#FE5100;">${fmtCLP0(q.totalCost)}</span>
+        <span style="font-size:18px; font-weight:800; color:#FE5100;">${fmtCLP0(q.totalCost)} + IVA</span>
       </div>
       <p style="font-size:7.5px; color:#9ca3af; margin:6px 2px 0; line-height:1.4;">Incluye equipo${q.rooms.length > 1 ? 's' : ''} e instalación${q.rooms.length > 1 ? ` para las ${q.rooms.length} habitaciones cotizadas` : ''}.</p>
     </div>
