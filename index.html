@@ -3664,9 +3664,6 @@ function buildTimelineSectionHtml(items, beneficios) {
 
 // Nota: ya no incluye el ícono de advertencia (naranjo) que se usaba antes junto al título
 function buildContactBlockHtml(monthlySavings) {
-  const reassurance = monthlySavings
-    ? `Confirmamos precio final y cuota tras la visita.`
-    : `Confirmamos precio final tras la visita.`;
   return `
     <div style="padding:0 24px 12px;">
       <div style="background:#FE5100; border-radius:10px; padding:12px 14px;">
@@ -3677,11 +3674,10 @@ function buildContactBlockHtml(monthlySavings) {
           <img src="${PDF_ICON_PHONE_WHITE_B64}" style="width:11px;height:11px;">
           <span style="font-size:10px;color:#fff;">${PDF_CONTACT_PHONE}</span>
         </div>
-        <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+        <div style="display:flex; align-items:center; gap:6px;">
           <img src="${PDF_ICON_EMAIL_WHITE_B64}" style="width:11px;height:9.5px;">
           <span style="font-size:10px;color:#fff;">${PDF_CONTACT_EMAIL}</span>
         </div>
-        <p style="font-size:8px; color:rgba(255,255,255,0.85); margin:0; line-height:1.4;">${reassurance}</p>
       </div>
     </div>
   `;
@@ -3731,7 +3727,7 @@ async function downloadQuotePDF({ sections, fileName }) {
 
   try {
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    const doc = new jsPDF({ unit: 'pt', format: 'a4', compress: true });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
 
