@@ -548,6 +548,21 @@ nav {
 }
 .cotiz-left .section-label { color: var(--naranja); }
 .cotiz-left .section-label::before { background: var(--naranja); }
+.cotiz-logo-row {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 18px;
+}
+.cotiz-logo-img { height: 52px; width: auto; display: block; flex-shrink: 0; }
+.cotiz-logo-img svg { height: 100%; width: auto; display: block; }
+.cotiz-title-big {
+  font-size: 16px; font-weight: 800;
+  letter-spacing: .5px; text-transform: uppercase;
+  color: var(--naranja);
+}
+@media (max-width: 420px) {
+  .cotiz-logo-img { height: 40px; }
+  .cotiz-title-big { font-size: 13.5px; }
+}
 .cotiz-h {
   font-size: clamp(28px, 3.2vw, 46px);
   font-weight: 800; letter-spacing: -2px;
@@ -1087,8 +1102,16 @@ footer {
 <section class="cotiz-section" id="cotizador">
   <div class="cotiz-layout">
     <div class="cotiz-left reveal">
-      <div class="section-label" style="color:var(--naranja)">Cotizador de Soluciones Energéticas</div>
-      <div class="cotiz-h">La energía justa<br>para tu <em>negocio</em></div>
+      <div class="cotiz-logo-row">
+        <span class="cotiz-logo-img"><svg viewBox="-3 -3 96 78" xmlns="http://www.w3.org/2000/svg">
+<g transform="matrix(1.00087 0 0 1 0 0.088)">
+<path d="M87.6863 23.4589C84.6082 12.2916 75.2919 4.27771 63.6173 1.37106 51.9427-1.53559 39.7608 0.54157 28.854 6.16978 17.9472 11.798 8.78165 20.2369 3.58533 29.1076-1.611 37.9784-1.21339 46.3625 5.12777 53.6839 9.97448 59.3259 17.3165 64.4399 25.3647 67.799 26.6466 68.3269 29.0597 69.3552 32.22 70.3355 31.3181 69.5527 30.5085 68.6695 29.8069 67.703 27.668 64.7827 26.6192 60.9026 26.6192 55.9873 26.6192 51.0721 27.8051 47.5005 30.1839 44.7446 32.6809 41.9193 35.9317 39.8646 39.5551 38.8216 43.5403 37.6147 47.6828 37.0071 51.8467 37.0187 53.8068 37.0115 55.7658 37.1122 57.7149 37.3203 59.1166 37.4566 60.5055 37.7019 61.8692 38.0538L61.8692 36.4703C61.9196 34.7028 61.5309 32.9504 60.7381 31.3699 59.9073 29.8799 58.6052 28.7079 57.0362 28.0382 54.8628 27.1541 52.5254 26.745 50.1809 26.8385 47.3338 26.8421 44.4906 27.0505 41.6734 27.4624 39.6232 27.7619 37.5994 28.2203 35.6202 28.8334 35.0505 29.0159 34.4407 28.7021 34.2582 28.1324 34.2377 28.0682 34.2232 28.0023 34.2149 27.9354L32.3982 16.4527C32.3013 15.888 32.6527 15.343 33.2071 15.1982 35.0992 14.6841 37.6082 14.1357 40.748 13.5941 44.5205 12.9272 48.3448 12.5969 52.1758 12.6069 58.8483 12.6069 64.072 13.5987 67.847 15.5821 71.449 17.3795 74.2856 20.4107 75.8403 24.1238 77.4655 28.3007 78.2505 32.7572 78.1506 37.238L78.1505 60.505 78.1505 60.505C89.3795 49.1457 90.4901 33.118 87.6863 23.4589Z" fill="#FE5100"/>
+<path d="M55.0344 48.5082C53.0902 48.4874 51.1496 48.6828 49.2486 49.0909 47.6786 49.3877 46.2216 50.1138 45.0394 51.1886 43.9122 52.3716 43.3328 53.9731 43.4421 55.6034 43.4421 57.66 44.0865 60.1622 46.2871 61.3345 50.1397 63.3911 57.0705 62.8632 61.8692 62.3148L61.8692 49.2006C60.8498 48.9891 59.8201 48.8313 58.7843 48.7275 57.5399 48.5786 56.2877 48.5053 55.0344 48.5082Z" fill="#FE5100"/>
+</g>
+</svg></span>
+        <span class="cotiz-title-big">Cotizador de Soluciones Energéticas</span>
+      </div>
+      <div class="cotiz-h">Energía y equipamiento<br>para tu <em>negocio</em></div>
       <p class="cotiz-lead">Cotiza en minutos la solución energética que necesita tu Pyme. Gas Licuado, paneles solares con almacenamiento, bomba de calor o cargadores eléctricos — todo con Abastible.</p>
       <div class="cotiz-features">
         <div class="cotiz-feat">
@@ -1132,17 +1155,17 @@ footer {
             </button>
             <div id="gas-glp-menu" class="gas-glp-menu">
               <button class="gas-glp-menu-item disabled" disabled title="Disponible próximamente">
-                <span class="gas-glp-menu-ico">🛢️</span>
+                <img src="data:image/png;base64,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" alt="Cilindros" class="gas-glp-menu-ico">
                 <div>
                   <div class="gas-glp-menu-name">Cilindros</div>
                   <div class="gas-glp-menu-desc">Próximamente</div>
                 </div>
               </button>
               <button class="gas-glp-menu-item" onclick="toggleGasMenu(event); abrirCotizadorGLP();">
-                <span class="gas-glp-menu-ico">⛽</span>
+                <img src="data:image/png;base64,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" alt="Granel" class="gas-glp-menu-ico">
                 <div>
                   <div class="gas-glp-menu-name">Granel</div>
-                  <div class="gas-glp-menu-desc">Cotizador de estanque</div>
+                  <div class="gas-glp-menu-desc">Estima tu instalación y consumo</div>
                 </div>
               </button>
             </div>
@@ -1563,7 +1586,7 @@ function cotizarEV() {
 }
 .gas-glp-menu-item:hover:not(.disabled) { background: rgba(255,255,255,.08); }
 .gas-glp-menu-item.disabled { cursor: not-allowed; opacity: .45; }
-.gas-glp-menu-ico { font-size: 20px; flex-shrink: 0; }
+.gas-glp-menu-ico { width: 26px; height: 26px; object-fit: contain; flex-shrink: 0; }
 .gas-glp-menu-name { font-size: 13.5px; font-weight: 700; }
 .gas-glp-menu-desc { font-size: 11.5px; color: rgba(255,255,255,.5); }
 
