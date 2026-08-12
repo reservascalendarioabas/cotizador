@@ -1636,17 +1636,24 @@ function cotizarEV() {
 @keyframes tool-spin { to { transform: rotate(360deg); } }
 
 /* Modo "flujo modal": deja ver el sitio Abastible+ (difuminado) detrás del
-   paso a paso del cotizador, en vez de un fondo sólido sin contexto. */
+   paso a paso del cotizador, en vez de un fondo sólido sin contexto.
+   tool-overlay-body es una columna flex: el iframe ocupa el espacio
+   disponible y la nota (si está visible) reserva su propio alto abajo,
+   para que nunca quede tapando contenido del iframe. */
 .tool-overlay-body {
-  position: relative; flex: 1;
+  display: flex; flex-direction: column;
+  flex: 1; min-height: 0;
 }
 .tool-overlay.blend {
   background: transparent;
 }
-.tool-overlay.blend .tool-overlay-body {
+.tool-overlay-frame-wrap {
+  position: relative; flex: 1; min-height: 0;
+}
+.tool-overlay.blend .tool-overlay-frame-wrap {
   background: transparent;
 }
-.tool-overlay.blend .tool-overlay-body::before {
+.tool-overlay.blend .tool-overlay-frame-wrap::before {
   content: '';
   position: absolute; inset: 0;
   backdrop-filter: blur(7px);
@@ -1658,15 +1665,12 @@ function cotizarEV() {
 
 .tool-overlay-note {
   display: none;
-  position: absolute; left: 0; right: 0; bottom: 0;
-  z-index: 5;
+  flex-shrink: 0;
   padding: 10px 24px;
   text-align: center;
   font-size: 11.5px; line-height: 1.5;
   color: rgba(255,255,255,.65);
-  background: rgba(13,27,42,.75);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(13,27,42,.92);
   border-top: 1px solid rgba(255,255,255,.08);
 }
 .tool-overlay-note.show { display: block; }
@@ -1684,10 +1688,12 @@ function cotizarEV() {
     </button>
   </div>
   <div class="tool-overlay-body">
-    <div class="tool-overlay-loading" id="tool-overlay-loading">
-      <span class="tool-overlay-spinner"></span> Cargando…
+    <div class="tool-overlay-frame-wrap">
+      <div class="tool-overlay-loading" id="tool-overlay-loading">
+        <span class="tool-overlay-spinner"></span> Cargando…
+      </div>
+      <iframe id="tool-overlay-iframe" title="Herramienta Abastible+"></iframe>
     </div>
-    <iframe id="tool-overlay-iframe" title="Herramienta Abastible+"></iframe>
     <div class="tool-overlay-note" id="tool-overlay-note">Los valores de esta cotización son referenciales y de carácter preliminar. El precio, dimensionamiento y condiciones finales de la instalación se confirman tras una visita técnica a terreno.</div>
   </div>
 </div>
